@@ -26,6 +26,10 @@ function BillHistory() {
   const [to, setTo] = useState("");
   const [preview, setPreview] = useState<Bill | null>(null);
   const [confirmDel, setConfirmDel] = useState<Bill | null>(null);
+  
+  function getShopForBill(bill: Bill) {
+    return settings.shops.find(s => s.id === bill.shopId) || settings.shops[0];
+  }
 
   const filtered = useMemo(() => {
     return bills.filter((b) => {
@@ -38,7 +42,14 @@ function BillHistory() {
   }, [bills, q, from, to]);
 
   function duplicate(b: Bill) {
-    const copy: Bill = { ...b, id: newId(), number: nextBillNumber(), createdAt: new Date().toISOString(), date: new Date().toISOString() };
+    const copy: Bill = { 
+      ...b, 
+      id: newId(), 
+      number: nextBillNumber(), 
+      createdAt: new Date().toISOString(), 
+      date: new Date().toISOString(),
+      shopId: b.shopId || settings.selectedShopId 
+    };
     saveBill(copy);
     advanceBillNumber();
     toast.success("Bill duplicated as " + copy.number);
@@ -103,11 +114,11 @@ function BillHistory() {
       {preview && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 backdrop-blur-sm p-4 no-print" onClick={() => setPreview(null)}>
           <div className="max-h-[92vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <BillPrint bill={preview} settings={settings} />
+            <BillPrint bill={preview} shop={getShopForBill(preview)} />
           </div>
         </div>
       )}
-      {preview && <div className="hidden print:block"><BillPrint bill={preview} settings={settings} /></div>}
+      {preview && <div className="hidden print:block"><BillPrint bill={preview} shop={getShopForBill(preview)} /></div>}
 
       {confirmDel && (
         <Confirm

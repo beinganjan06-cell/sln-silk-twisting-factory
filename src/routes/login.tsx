@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, EyeOff, Lock, User, ShieldCheck, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { SlnLogo } from "@/components/sln-logo";
 import { signIn, useSettings } from "@/lib/store";
@@ -18,23 +18,27 @@ export const Route = createFileRoute("/login")({
 function Login() {
   const [settings] = useSettings();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin");
-  const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("sln@gmail.com");
+  const [password, setPassword] = useState("123456");
   const [showPwd, setShowPwd] = useState(false);
   const [busy, setBusy] = useState(false);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      toast.error("Username and password are required");
+    if (!email.trim() || !password.trim()) {
+      toast.error("Email and password are required");
       return;
     }
     setBusy(true);
     setTimeout(() => {
-      signIn();
-      toast.success("Welcome back");
-      navigate({ to: "/dashboard" });
+      const user = signIn(email, password);
+      if (user) {
+        toast.success("Welcome back!");
+        navigate({ to: "/dashboard" });
+      } else {
+        toast.error("Invalid email or password!");
+      }
+      setBusy(false);
     }, 500);
   }
 
@@ -45,7 +49,7 @@ function Login() {
       <div className="pointer-events-none absolute -bottom-40 -right-32 size-[520px] rounded-full bg-brand/25 blur-3xl animate-pulse [animation-delay:1s]" />
 
       <div className="relative w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="rounded-3xl glass shadow-elegant p-8 sm:p-10">
+        <div className="rounded-3xl glass shadow-elegant p-8 sm:p-10 card-hover">
           <div className="flex flex-col items-center text-center gap-3">
             <SlnLogo size={64} />
             <div>
@@ -59,13 +63,14 @@ function Login() {
           </div>
 
           <form className="mt-8 space-y-4" onSubmit={onSubmit}>
-            <Field icon={User} label="Username">
+            <Field icon={Mail} label="Email">
               <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
-                autoComplete="username"
-                className="w-full bg-transparent outline-none text-sm"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="sln@gmail.com or vinayaka@gmail.com"
+                autoComplete="email"
+                type="email"
+                className="w-full bg-transparent outline-none text-sm input-fancy"
               />
             </Field>
             <Field icon={Lock} label="Password">
@@ -73,35 +78,31 @@ function Login() {
                 type={showPwd ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="123456"
                 autoComplete="current-password"
-                className="w-full bg-transparent outline-none text-sm"
+                className="w-full bg-transparent outline-none text-sm input-fancy"
               />
-              <button type="button" onClick={() => setShowPwd((v) => !v)} className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => setShowPwd((v) => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
                 {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </Field>
 
-            <div className="flex items-center justify-between text-xs">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-primary size-4" />
-                <span>Remember me</span>
-              </label>
-              <button type="button" className="text-primary hover:underline">Forgot password?</button>
-            </div>
-
             <button
               type="submit"
               disabled={busy}
-              className="group w-full inline-flex items-center justify-center gap-2 rounded-xl gradient-primary text-primary-foreground px-5 py-3 text-sm font-semibold shadow-glow disabled:opacity-70 transition-all hover:translate-y-[-1px]"
+              className="group w-full inline-flex items-center justify-center gap-2 rounded-xl gradient-primary text-primary-foreground px-5 py-3 text-sm font-semibold shadow-glow disabled:opacity-70 transition-all hover:translate-y-[-1px] liquid-btn"
             >
               {busy ? "Signing in…" : "Sign in"}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </button>
 
-            <p className="text-center text-[11px] text-muted-foreground">
-              Tip: any username/password works in this demo.
-            </p>
+            <div className="mt-4 text-xs text-muted-foreground">
+              <p className="font-medium mb-1">Available users:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>sln@gmail.com / 123456 (SLN shop)</li>
+                <li>vinayaka@gmail.com / 123456 (Vinayaka shop)</li>
+              </ul>
+            </div>
           </form>
         </div>
         <p className="mt-4 text-center text-[11px] text-muted-foreground">
@@ -114,11 +115,11 @@ function Login() {
 
 function Field({
   icon: Icon, label, children,
-}: { icon: typeof User; label: string; children: React.ReactNode }) {
+}: { icon: typeof Lock; label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">{label}</span>
-      <span className="flex items-center gap-2 rounded-xl border border-input bg-card/60 px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-ring transition">
+      <span className="flex items-center gap-2 rounded-xl border border-input bg-card/60 px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-ring transition-all input-fancy">
         <Icon className="size-4 text-muted-foreground shrink-0" />
         {children}
       </span>

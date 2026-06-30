@@ -40,7 +40,7 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
           (open ? "translate-x-0" : "-translate-x-full lg:translate-x-0")
         }
       >
-        <div className="h-full m-3 mr-0 lg:mr-3 flex flex-col rounded-3xl glass shadow-elegant overflow-hidden">
+        <div className="h-full m-3 mr-0 lg:mr-3 flex flex-col rounded-3xl glass shadow-elegant overflow-hidden card-hover">
           {/* Header */}
           <div className="flex items-center gap-3 p-5 border-b border-border/60">
             <SlnLogo size={44} />
@@ -51,7 +51,7 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
             </div>
             <button
-              className="lg:hidden rounded-lg p-2 hover:bg-accent"
+              className="lg:hidden rounded-lg p-2 hover:bg-accent transition-all"
               onClick={onClose}
               aria-label="Close menu"
             >
@@ -92,7 +92,7 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
             <ThemeToggle />
             <button
               onClick={() => { signOut(); toast.success("Signed out"); navigate({ to: "/login" }); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-all hover-lift"
             >
               <LogOut className="size-4" />
               Logout
@@ -113,8 +113,8 @@ function NavItem({
       className={
         "group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all " +
         (active
-          ? "gradient-primary text-primary-foreground shadow-glow"
-          : "text-foreground/80 hover:bg-accent hover:text-accent-foreground")
+          ? "gradient-primary text-primary-foreground shadow-glow liquid-btn"
+          : "text-foreground/80 hover:bg-accent hover:text-accent-foreground hover-lift")
       }
     >
       <Icon className={"size-4 transition-transform group-hover:scale-110 " + (active ? "" : "text-muted-foreground")} />
@@ -131,7 +131,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-accent transition-colors"
+      className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-accent transition-all hover-lift"
     >
       {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
       <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
@@ -143,7 +143,7 @@ export function MenuButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="lg:hidden inline-flex items-center justify-center rounded-xl border border-border bg-card p-2.5 shadow-sm hover:bg-accent"
+      className="lg:hidden inline-flex items-center justify-center rounded-xl border border-border bg-card p-2.5 shadow-sm hover:bg-accent transition-all hover-lift"
       aria-label="Open menu"
     >
       <Menu className="size-5" />

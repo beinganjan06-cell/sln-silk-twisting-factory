@@ -27,11 +27,12 @@ function makeEmptyLine(defaultGst: number): BillLine {
 }
 
 function CreateBill() {
-  const [settings] = useSettings();
+  const [settings, setSettings] = useSettings();
   const [products] = useProducts();
   const [customers] = useCustomers();
   const navigate = useNavigate();
 
+  const [selectedShopId, setSelectedShopId] = useState(settings.selectedShopId);
   const [billNumber, setBillNumber] = useState(() => nextBillNumber());
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState(() => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
@@ -44,6 +45,8 @@ function CreateBill() {
   const [terms, setTerms] = useState("Goods once sold will not be taken back.");
   const [lines, setLines] = useState<BillLine[]>([makeEmptyLine(settings.defaultGst)]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  
+  const selectedShop = settings.shops.find(s => s.id === selectedShopId) || settings.shops[0];
 
   const customer = customers.find((c) => c.id === customerId);
 
@@ -137,6 +140,7 @@ function CreateBill() {
       notes,
       terms,
       createdAt: new Date().toISOString(),
+      shopId: selectedShopId,
     };
   }
 
@@ -179,18 +183,31 @@ function CreateBill() {
       />
 
       {/* HEADER CARD */}
-      <section className="rounded-2xl bg-card border border-border/60 p-5">
+      <section className="rounded-2xl bg-card border border-border/60 p-5 card-hover">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Company</div>
-            <div className="font-display font-bold text-xl text-brand">{settings.companyName}</div>
-            <div className="text-sm text-muted-foreground">{settings.address}</div>
-            <div className="text-sm">📞 {settings.phone} · TIN {settings.tin}</div>
+          <div className="lg:col-span-2 space-y-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">Shop</div>
+              <Select
+                value={selectedShopId}
+                onChange={(e) => {
+                  setSelectedShopId(e.target.value);
+                  setSettings(s => ({ ...s, selectedShopId: e.target.value }));
+                }}
+              >
+                {settings.shops.map((shop) => (
+                  <option key={shop.id} value={shop.id}>{shop.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="font-display font-bold text-xl text-brand">{selectedShop.name}</div>
+            <div className="text-sm text-muted-foreground">{selectedShop.address}</div>
+            <div className="text-sm">📞 {selectedShop.phone} · TIN {selectedShop.tin}</div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bill type">
               <div className="flex rounded-xl bg-muted p-1">
-                {(["Cash", "Credit"] as const).map((t) => (
+                {(["Cash", "Online"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setType(t)}
@@ -237,7 +254,7 @@ function CreateBill() {
       </section>
 
       {/* LINES */}
-      <section className="mt-4 rounded-2xl bg-card border border-border/60 overflow-hidden">
+      <section className="mt-4 rounded-2xl bg-card border border-border/60 overflow-hidden card-hover">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground sticky top-0">
@@ -270,14 +287,14 @@ function CreateBill() {
 
       {/* TOTALS + NOTES */}
       <section className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 rounded-2xl bg-card border border-border/60 p-5 space-y-3">
+        <div className="lg:col-span-2 rounded-2xl bg-card border border-border/60 p-5 space-y-3 card-hover">
           <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes (won't print)" /></Field>
-          <Field label="Terms &amp; conditions"><Textarea value={terms} onChange={(e) => setTerms(e.target.value)} /></Field>
+          <Field label="Terms & conditions"><Textarea value={terms} onChange={(e) => setTerms(e.target.value)} /></Field>
           <div className="text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Amount in words:</span> {numberToIndianWords(totals.grand)}
           </div>
         </div>
-        <div className="rounded-2xl bg-card border border-border/60 p-5">
+        <div className="rounded-2xl bg-card border border-border/60 p-5 card-hover">
           <h3 className="font-display font-bold text-lg">Summary</h3>
           <div className="mt-3 space-y-2 text-sm">
             <Row k="Sub total" v={formatINR(totals.sub)} />
@@ -300,14 +317,14 @@ function CreateBill() {
       <div className="hidden print:block">
         <BillPrint
           bill={{ ...buildBill() }}
-          settings={getSettings()}
+          shop={selectedShop}
         />
       </div>
 
       {/* PREVIEW MODAL */}
       {previewOpen && (
         <PreviewModal onClose={() => setPreviewOpen(false)}>
-          <BillPrint bill={buildBill()} settings={settings} />
+          <BillPrint bill={buildBill()} shop={selectedShop} />
         </PreviewModal>
       )}
     </>
@@ -385,13 +402,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={"w-full rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition " + (props.className ?? "")} />;
+  return <input {...props} className={"w-full rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition-all input-fancy " + (props.className ?? "")} />;
 }
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={"w-full rounded-xl border border-input bg-card/60 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition " + (props.className ?? "")} />;
+  return <select {...props} className={"w-full rounded-xl border border-input bg-card/60 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition-all input-fancy " + (props.className ?? "")} />;
 }
 function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} rows={2} className={"w-full rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition " + (props.className ?? "")} />;
+  return <textarea {...props} rows={2} className={"w-full rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring transition-all input-fancy " + (props.className ?? "")} />;
 }
 function NumberInput({
   value, onChange, step, inputRef, onKeyDown,
@@ -405,7 +422,7 @@ function NumberInput({
       onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
       onFocus={(e) => e.target.select()}
       onKeyDown={onKeyDown}
-      className="w-full rounded-lg border border-input bg-transparent px-2 py-2 text-sm text-right tabular-nums focus:ring-2 focus:ring-ring outline-none"
+      className="w-full rounded-lg border border-input bg-transparent px-2 py-2 text-sm text-right tabular-nums focus:ring-2 focus:ring-ring outline-none input-fancy"
     />
   );
 }
@@ -416,12 +433,12 @@ function Btn({
   children, icon: Icon, variant = "primary", onClick,
 }: { children: React.ReactNode; icon: typeof Save; variant?: "primary" | "outline" | "ghost"; onClick?: () => void }) {
   const cls = variant === "primary"
-    ? "gradient-primary text-primary-foreground shadow-glow"
+    ? "gradient-primary text-primary-foreground shadow-glow liquid-btn"
     : variant === "outline"
-      ? "border border-input bg-card hover:bg-accent"
-      : "hover:bg-accent";
+      ? "border border-input bg-card hover:bg-accent hover-lift"
+      : "hover:bg-accent hover-lift";
   return (
-    <button onClick={onClick} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition hover:translate-y-[-1px] ${cls}`}>
+    <button onClick={onClick} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all hover:translate-y-[-1px] ${cls}`}>
       <Icon className="size-4" /> {children}
     </button>
   );

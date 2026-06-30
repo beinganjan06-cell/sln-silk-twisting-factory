@@ -61,6 +61,23 @@ export interface Bill {
   notes: string;
   terms: string;
   createdAt: string;
+  shopId: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  password: string;
+  defaultShopId: string;
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  tin: string;
+  logoVariant?: "sln" | "vinayaka";
 }
 
 export interface Settings {
@@ -78,6 +95,10 @@ export interface Settings {
   theme: "light" | "dark";
   bank: string;
   upi: string;
+  shops: Shop[];
+  selectedShopId: string;
+  users: User[];
+  currentUserId: string | null;
 }
 
 const KEY = {
@@ -126,6 +147,40 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "light",
   bank: "",
   upi: "",
+  shops: [
+    {
+      id: "shop-sln",
+      name: "Sri Lakshmi Narasimhaswamy Silk Twisting Factory",
+      address: "Hosapet Road, Magadi Town - 562 120, Ramanagaram Dist.",
+      phone: "94480 17596",
+      tin: "29510839729",
+      logoVariant: "sln",
+    },
+    {
+      id: "shop-vinayaka",
+      name: "Sri Vinayaka Silk Twisting Factory",
+      address: "Hosapet Main Road, Magadi Town - 562 120, Ramanagaram Dist.",
+      phone: "94480 17596",
+      tin: "29510839729",
+      logoVariant: "vinayaka",
+    },
+  ],
+  selectedShopId: "shop-sln",
+  users: [
+    {
+      id: "user-sln",
+      email: "sln@gmail.com",
+      password: "123456",
+      defaultShopId: "shop-sln",
+    },
+    {
+      id: "user-vinayaka",
+      email: "vinayaka@gmail.com",
+      password: "123456",
+      defaultShopId: "shop-vinayaka",
+    },
+  ],
+  currentUserId: null,
 };
 
 const DEFAULT_UNITS: Unit[] = ["Kg", "Gram", "Piece", "Bundle", "Cone", "Box", "Roll"];
@@ -133,7 +188,54 @@ const DEFAULT_CATEGORIES = ["Silk Yarn", "Twisted Silk", "Raw Material", "Finish
 
 function seedIfEmpty() {
   if (typeof window === "undefined") return;
-  if (!localStorage.getItem(KEY.settings)) write(KEY.settings, DEFAULT_SETTINGS);
+  
+  // Ensure we always have both shops and both users with fixed IDs!
+  const existingSettings = read(KEY.settings, null);
+  const finalShops = [
+    {
+      id: "shop-sln",
+      name: "Sri Lakshmi Narasimhaswamy Silk Twisting Factory",
+      address: "Hosapet Road, Magadi Town - 562 120, Ramanagaram Dist.",
+      phone: "94480 17596",
+      tin: "29510839729",
+      logoVariant: "sln",
+    },
+    {
+      id: "shop-vinayaka",
+      name: "Sri Vinayaka Silk Twisting Factory",
+      address: "Hosapet Main Road, Magadi Town - 562 120, Ramanagaram Dist.",
+      phone: "94480 17596",
+      tin: "29510839729",
+      logoVariant: "vinayaka",
+    },
+  ];
+  
+  const finalUsers = [
+    {
+      id: "user-sln",
+      email: "sln@gmail.com",
+      password: "123456",
+      defaultShopId: "shop-sln",
+    },
+    {
+      id: "user-vinayaka",
+      email: "vinayaka@gmail.com",
+      password: "123456",
+      defaultShopId: "shop-vinayaka",
+    },
+  ];
+  
+  if (existingSettings) {
+    write(KEY.settings, {
+      ...existingSettings,
+      shops: finalShops,
+      users: finalUsers,
+      selectedShopId: existingSettings.selectedShopId || "shop-sln",
+    });
+  } else {
+    write(KEY.settings, DEFAULT_SETTINGS);
+  }
+  
   if (!localStorage.getItem(KEY.units)) write(KEY.units, DEFAULT_UNITS);
   if (!localStorage.getItem(KEY.categories)) write(KEY.categories, DEFAULT_CATEGORIES);
   if (!localStorage.getItem(KEY.products)) {
@@ -209,21 +311,49 @@ export function deleteBill(id: string) {
 
 export const newId = uid;
 
-// ----- Auth (mock) -----
+// ----- Auth (with users) -----
+export function getCurrentUser(settings?: Settings): User | null {
+  const s = settings || getSettings();
+  if (!s.currentUserId) return null;
+  return s.users.find(u => u.id === s.currentUserId) || null;
+}
 export function isAuthed(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(KEY.auth) === "1";
+  const s = getSettings();
+  return !!s.currentUserId;
 }
-export function signIn() { localStorage.setItem(KEY.auth, "1"); notify(); }
-export function signOut() { localStorage.removeItem(KEY.auth); notify(); }
+export function signIn(email: string, password: string): User | null {
+  const s = getSettings();
+  const user = s.users.find(u => u.email === email && u.password === password);
+  if (user) {
+    write(KEY.settings, {
+      ...s,
+      currentUserId: user.id,
+      selectedShopId: user.defaultShopId,
+    });
+    return user;
+  }
+  return null;
+}
+export function signOut() {
+  const s = getSettings();
+  write(KEY.settings, {
+    ...s,
+    currentUserId: null,
+  });
+}
 export function useAuth() {
-  const [v, setV] = useState<boolean>(() => isAuthed());
+  const [authed, setAuthed] = useState<boolean>(() => isAuthed());
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   useEffect(() => {
-    const l = () => setV(isAuthed());
+    const l = () => {
+      setAuthed(isAuthed());
+      setCurrentUser(getCurrentUser());
+    };
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return v;
+  return { authed, currentUser };
 }
 
 // ----- Theme -----

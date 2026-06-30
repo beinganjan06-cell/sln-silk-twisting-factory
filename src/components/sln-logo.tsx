@@ -1,5 +1,23 @@
-interface Props { size?: number; className?: string }
-export function SlnLogo({ size = 44, className }: Props) {
+interface Props { size?: number; className?: string; variant?: "sln" | "vinayaka" }
+export function SlnLogo({ size = 44, className, variant = "sln" }: Props) {
+  if (variant === "vinayaka") {
+    return (
+      <div
+        className={"relative inline-flex items-center justify-center rounded-full shadow-elegant overflow-hidden " + (className ?? "")}
+        style={{
+          width: size,
+          height: size,
+        }}
+        aria-label="Vinayaka logo"
+      >
+        <img
+          src="/vinayak_silk_logo.png"
+          alt="Vinayaka logo"
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      </div>
+    );
+  }
   return (
     <div
       className={"relative inline-flex items-center justify-center rounded-full shadow-elegant " + (className ?? "")}

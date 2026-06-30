@@ -1,13 +1,16 @@
-import type { Bill, Settings } from "@/lib/store";
+import type { Bill, Settings, Shop } from "@/lib/store";
 import { SlnLogo } from "./sln-logo";
 import { formatNumber, numberToIndianWords } from "@/lib/format";
 
-interface Props { bill: Bill; settings: Settings }
+interface Props { bill: Bill; shop: Shop }
 
-export function BillPrint({ bill, settings }: Props) {
+export function BillPrint({ bill, shop }: Props) {
   // Pad lines for a printed-receipt feel
   const padded = [...bill.lines];
   while (padded.length < 10) padded.push({ id: "x" + padded.length } as never);
+  
+  // Get short name for footer
+  const shortShopName = shop.name.includes("Vinayaka") ? "Vinayaka Silk Twisting Factory" : "SLN Silk Twisting Factory";
 
   return (
     <div
@@ -16,20 +19,20 @@ export function BillPrint({ bill, settings }: Props) {
     >
       {/* Top strip */}
       <div className="flex items-center justify-between text-[10px] font-semibold">
-        <div>TIN : {settings.tin}</div>
+        <div>TIN : {shop.tin}</div>
         <div className="px-3 py-0.5 border-y-2 border-[#1f2b8a]">CASH /CREDIT BILL</div>
-        <div>Mobile : {settings.phone}</div>
+        <div>Mobile : {shop.phone}</div>
       </div>
 
       {/* Company header */}
       <div className="mt-1 flex items-center justify-center gap-3">
-        <SlnLogo size={42} />
+        <SlnLogo size={42} variant={shop.logoVariant} />
         <div className="text-center">
           <div className="font-display font-bold text-[#c1121f] leading-tight" style={{ fontSize: 22 }}>
-            {settings.companyName}
+            {shop.name}
           </div>
           <div className="bg-[#1f2b8a] text-white text-[10px] px-2 py-0.5 rounded mt-1 inline-block">
-            {settings.address}
+            {shop.address}
           </div>
         </div>
       </div>
@@ -86,8 +89,8 @@ export function BillPrint({ bill, settings }: Props) {
             <td colSpan={3} className="px-2 py-1 text-[10px]">
               <span className="font-semibold">In Words Rs.</span> {numberToIndianWords(bill.grandTotal)}
             </td>
-            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-2 text-right font-semibold">
-              For SLN Silk Twisting Factory
+            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-2 text-right font-semibold text-[#c1121f]">
+              For {shortShopName}
             </td>
           </tr>
           <tr>
