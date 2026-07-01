@@ -3,12 +3,12 @@ import {
   Receipt, TrendingUp, Calendar, Users, Package, AlertCircle,
   Plus, FilePlus2, History, BarChart3,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { openMenu } from "./_app";
-import { useBills, useCustomers, useProducts } from "@/lib/store";
+import { dashboardAPI } from "@/lib/dashboard";
 import { formatINR } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/dashboard")({
@@ -22,55 +22,30 @@ export const Route = createFileRoute("/_app/dashboard")({
 });
 
 function Dashboard() {
-  const [bills] = useBills();
-  const [customers] = useCustomers();
-  const [products] = useProducts();
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const stats = useMemo(() => {
-    const today = new Date().toDateString();
-    const todays = bills.filter((b) => new Date(b.date).toDateString() === today);
-    const month = new Date().getMonth();
-    const year = new Date().getFullYear();
-    const monthly = bills.filter((b) => {
-      const d = new Date(b.date);
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-    const outstanding = customers.reduce((a, c) => a + (c.balance || 0), 0);
-    return {
-      todaysBills: todays.length,
-      todaysSales: todays.reduce((a, b) => a + b.grandTotal, 0),
-      monthlySales: monthly.reduce((a, b) => a + b.grandTotal, 0),
-      productsCount: products.length,
-      customersCount: customers.length,
-      outstanding,
-    };
-  }, [bills, customers, products]);
-
-  const chartData = useMemo(() => {
-    const days = 14;
-    const out: { day: string; sales: number }[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toDateString();
-      const total = bills.filter((b) => new Date(b.date).toDateString() === key).reduce((a, b) => a + b.grandTotal, 0);
-      out.push({ day: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }), sales: total });
-    }
-    return out;
-  }, [bills]);
-
-  const topProducts = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; amount: number }>();
-    for (const b of bills) {
-      for (const l of b.lines) {
-        const cur = map.get(l.productId) ?? { name: l.description, qty: 0, amount: 0 };
-        cur.qty += l.quantity;
-        cur.amount += l.quantity * l.rate * (1 - l.discountPct / 100) * (1 + l.gstPct / 100);
-        map.set(l.productId, cur);
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await dashboardAPI.getStats();
+        setStats(data);
+      } catch (error) {
+        console.error("Failed to load dashboard stats:", error);
+      } finally {
+        setLoading(false);
       }
     }
-    return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, 5);
-  }, [bills]);
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -86,12 +61,12 @@ function Dashboard() {
       />
 
       <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard label="Today's Bills" value={stats.todaysBills} icon={Receipt} accent="primary" />
-        <StatCard label="Today's Sales" value={stats.todaysSales} icon={TrendingUp} accent="success" prefix="₹" decimals={0} />
-        <StatCard label="Monthly Sales" value={stats.monthlySales} icon={Calendar} accent="primary" prefix="₹" decimals={0} />
-        <StatCard label="Products" value={stats.productsCount} icon={Package} accent="brand" />
-        <StatCard label="Customers" value={stats.customersCount} icon={Users} accent="primary" />
-        <StatCard label="Outstanding" value={stats.outstanding} icon={AlertCircle} accent="warning" prefix="₹" decimals={0} />
+        <StatCard label="Today's Bills" value={stats?.todaysBills || 0} icon={Receipt} accent="primary" />
+        <StatCard label="Today's Sales" value={stats?.todaysSales || 0} icon={TrendingUp} accent="success" prefix="₹" decimals={0} />
+        <StatCard label="Monthly Sales" value={stats?.monthlySales || 0} icon={Calendar} accent="primary" prefix="₹" decimals={0} />
+        <StatCard label="Products" value={stats?.productsCount || 0} icon={Package} accent="brand" />
+        <StatCard label="Customers" value={stats?.customersCount || 0} icon={Users} accent="primary" />
+        <StatCard label="Outstanding" value={stats?.outstanding || 0} icon={AlertCircle} accent="warning" prefix="₹" decimals={0} />
       </section>
 
       <section className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -104,18 +79,19 @@ function Dashboard() {
           </div>
           <div className="h-64">
             <ResponsiveContainer>
-              <AreaChart data={chartData} margin={{ left: -10, right: 8, top: 8 }}>
+              <AreaChart data={stats?.chartData || []} margin={{ left: -10, right: 8, top: 8 }}>
                 <defs>
                   <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="oklch(0.55 0.2 265)" stopOpacity={0.55} />
-                    <stop offset="100%" stopColor="oklch(0.55 0.2 265)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="oklch(0.52 0.24 18)" stopOpacity={0.6} />
+                    <stop offset="50%" stopColor="oklch(0.32 0.2 255)" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="oklch(0.32 0.2 255)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 250)" vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip formatter={(v: number) => formatINR(v)} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)" }} />
-                <Area type="monotone" dataKey="sales" stroke="oklch(0.5 0.2 265)" fill="url(#g)" strokeWidth={2.5} />
+                <Area type="monotone" dataKey="sales" stroke="oklch(0.52 0.24 18)" fill="url(#g)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -150,15 +126,15 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {bills.slice(0, 6).map((b) => (
+                {stats?.recentBills?.slice(0, 6).map((b: any) => (
                   <tr key={b.id} className="border-t border-border/60 hover:bg-accent/40 transition-colors">
                     <td className="px-5 py-3 font-semibold">{b.number}</td>
-                    <td className="px-5 py-3 truncate max-w-[220px]">{b.customerSnapshot.name || "—"}</td>
+                    <td className="px-5 py-3 truncate max-w-[220px]">{b.customerSnapshot?.name || "—"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{new Date(b.date).toLocaleDateString("en-IN")}</td>
                     <td className="px-5 py-3 text-right font-semibold tabular-nums">{formatINR(b.grandTotal)}</td>
                   </tr>
                 ))}
-                {bills.length === 0 && (
+                {(!stats?.recentBills || stats?.recentBills.length === 0) && (
                   <tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-muted-foreground">No bills yet — create your first bill.</td></tr>
                 )}
               </tbody>
@@ -169,7 +145,7 @@ function Dashboard() {
         <div className="rounded-2xl bg-card border border-border/60 p-5">
           <h2 className="font-display font-bold text-lg">Top selling products</h2>
           <ul className="mt-3 space-y-3">
-            {topProducts.map((p, i) => (
+            {stats?.topProducts?.map((p: any, i: number) => (
               <li key={p.name + i} className="flex items-center gap-3">
                 <div className="size-9 grid place-items-center rounded-xl gradient-brand text-brand-foreground text-xs font-bold">{i + 1}</div>
                 <div className="min-w-0 flex-1">
@@ -179,7 +155,7 @@ function Dashboard() {
                 <div className="font-semibold tabular-nums">{formatINR(p.amount)}</div>
               </li>
             ))}
-            {topProducts.length === 0 && <li className="text-sm text-muted-foreground">No data yet</li>}
+            {(!stats?.topProducts || stats?.topProducts.length === 0) && <li className="text-sm text-muted-foreground">No data yet</li>}
           </ul>
         </div>
       </section>

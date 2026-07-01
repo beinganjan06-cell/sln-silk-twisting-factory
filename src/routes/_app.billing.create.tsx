@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Plus, Printer, Save, Trash2, X, FileText, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { openMenu } from "./_app";
 import {
-  advanceBillNumber, getSettings, newId, nextBillNumber, saveBill,
-  useCustomers, useProducts, useSettings,
-  type Bill, type BillLine,
+  useCustomers, useProducts, useSettings, type Bill, type BillLine, type Shop,
 } from "@/lib/store";
 import { formatINR, numberToIndianWords } from "@/lib/format";
 import { BillPrint } from "@/components/bill-print";
+import { billsAPI } from "@/lib/bills";
+import { productsAPI } from "@/lib/products";
+import { customersAPI } from "@/lib/customers";
+import { settingsAPI } from "@/lib/settings";
 
 export const Route = createFileRoute("/_app/billing/create")({
   head: () => ({
@@ -20,20 +22,22 @@ export const Route = createFileRoute("/_app/billing/create")({
     ],
   }),
   component: CreateBill,
+  ssr: false,
 });
 
 function makeEmptyLine(defaultGst: number): BillLine {
-  return { id: newId(), productId: "", description: "", quantity: 1, unit: "Kg", rate: 0, discountPct: 0, gstPct: defaultGst };
+  return { id: Math.random().toString(36).slice(2), productId: "", description: "", quantity: 1, unit: "Kg", rate: 0, discountPct: 0, gstPct: defaultGst };
 }
 
 function CreateBill() {
-  const [settings, setSettings] = useSettings();
-  const [products] = useProducts();
-  const [customers] = useCustomers();
+  const [settings] = useSettings();
+  const [products, setProducts] = useProducts();
+  const [customers, setCustomers] = useCustomers();
+  const [shops, setShops] = useState<Shop[]>([]);
   const navigate = useNavigate();
 
   const [selectedShopId, setSelectedShopId] = useState(settings.selectedShopId);
-  const [billNumber, setBillNumber] = useState(() => nextBillNumber());
+  const [billNumber, setBillNumber] = useState(() => `${settings.billPrefix}-${String(settings.nextBillNumber).padStart(4, "0")}`);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState(() => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
   const [type, setType] = useState<"Cash" | "Credit">("Cash");
@@ -45,10 +49,35 @@ function CreateBill() {
   const [terms, setTerms] = useState("Goods once sold will not be taken back.");
   const [lines, setLines] = useState<BillLine[]>([makeEmptyLine(settings.defaultGst)]);
   const [previewOpen, setPreviewOpen] = useState(false);
-  
-  const selectedShop = settings.shops.find(s => s.id === selectedShopId) || settings.shops[0];
+  const [loading, setLoading] = useState(true);
+
+  const selectedShop = shops.find(s => s.id === selectedShopId) || shops?.[0] || { id: "default", name: "", address: "", phone: "", tin: "" };
 
   const customer = customers.find((c) => c.id === customerId);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [p, c, s] = await Promise.all([
+          productsAPI.getAll(), 
+          customersAPI.getAll(),
+          settingsAPI.getShops()
+        ]);
+        setProducts(p);
+        setCustomers(c);
+        setShops(s);
+        // If no selected shop, set first one
+        if (!s.find(shop => shop.id === selectedShopId) && s.length > 0) {
+          setSelectedShopId(s[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   useEffect(() => {
     if (customer) setPartyTin(customer.tinNumber || "");
@@ -111,13 +140,11 @@ function CreateBill() {
     setPartyTin("");
     setVehicleNumber("");
     setNotes("");
-    setBillNumber(nextBillNumber());
     toast.info("Form cleared");
   }
 
-  function buildBill(): Bill {
+  function buildBill(): Omit<Bill, "id" | "createdAt"> {
     return {
-      id: newId(),
       number: billNumber,
       date: new Date(date).toISOString(),
       time,
@@ -139,7 +166,6 @@ function CreateBill() {
       grandTotal: totals.grand,
       notes,
       terms,
-      createdAt: new Date().toISOString(),
       shopId: selectedShopId,
     };
   }
@@ -153,16 +179,30 @@ function CreateBill() {
     return null;
   }
 
-  function handleSave(thenPrint: boolean) {
+  async function handleSave(thenPrint: boolean) {
     const err = validate();
     if (err) { toast.error(err); return; }
-    const bill = buildBill();
-    saveBill(bill);
-    advanceBillNumber();
-    setBillNumber(nextBillNumber());
-    toast.success("Bill saved");
-    if (thenPrint) setTimeout(() => window.print(), 200);
-    else navigate({ to: "/billing/history" });
+    try {
+      const billData = buildBill();
+      const result = await billsAPI.create(billData as any);
+      if (result.success) {
+        toast.success("Bill saved");
+        setBillNumber(`${settings.billPrefix}-${String(Number(billNumber.split("-")[1]) + 1).padStart(4, "0")}`);
+        if (thenPrint) setTimeout(() => window.print(), 200);
+        else navigate({ to: "/billing/history" });
+      }
+    } catch (error) {
+      console.error("Failed to save bill:", error);
+      toast.error("Failed to save bill");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -190,12 +230,9 @@ function CreateBill() {
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">Shop</div>
               <Select
                 value={selectedShopId}
-                onChange={(e) => {
-                  setSelectedShopId(e.target.value);
-                  setSettings(s => ({ ...s, selectedShopId: e.target.value }));
-                }}
+                onChange={(e) => setSelectedShopId(e.target.value)}
               >
-                {settings.shops.map((shop) => (
+                {shops.map((shop) => (
                   <option key={shop.id} value={shop.id}>{shop.name}</option>
                 ))}
               </Select>
@@ -207,7 +244,7 @@ function CreateBill() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bill type">
               <div className="flex rounded-xl bg-muted p-1">
-                {(["Cash", "Online"] as const).map((t) => (
+                {(["Cash", "Credit"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setType(t)}
@@ -316,7 +353,7 @@ function CreateBill() {
       {/* Hidden print area for "Save & Print" */}
       <div className="hidden print:block">
         <BillPrint
-          bill={{ ...buildBill() }}
+          bill={{ ...buildBill(), id: "", createdAt: "" }}
           shop={selectedShop}
         />
       </div>
@@ -324,7 +361,7 @@ function CreateBill() {
       {/* PREVIEW MODAL */}
       {previewOpen && (
         <PreviewModal onClose={() => setPreviewOpen(false)}>
-          <BillPrint bill={buildBill()} shop={selectedShop} />
+          <BillPrint bill={{ ...buildBill(), id: "", createdAt: "" }} shop={selectedShop} />
         </PreviewModal>
       )}
     </>

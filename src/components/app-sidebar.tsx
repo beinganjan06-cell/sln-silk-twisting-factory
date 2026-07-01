@@ -40,10 +40,12 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
           (open ? "translate-x-0" : "-translate-x-full lg:translate-x-0")
         }
       >
-        <div className="h-full m-3 mr-0 lg:mr-3 flex flex-col rounded-3xl glass shadow-elegant overflow-hidden card-hover">
+        <div className="h-full m-3 mr-0 lg:mr-3 flex flex-col rounded-3xl glass shadow-elegant overflow-hidden sidebar-glow">
           {/* Header */}
           <div className="flex items-center gap-3 p-5 border-b border-border/60">
-            <SlnLogo size={44} />
+            <div className="logo-animate">
+              <SlnLogo size={44} />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground">SLN Billing</div>
               <div className="truncate font-display font-bold text-sm leading-tight">
@@ -64,27 +66,27 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Workspace
             </div>
-            {nav.slice(0, 1).map((item) => <NavItem key={item.to} {...item} active={pathname === item.to} />)}
+            {nav.slice(0, 1).map((item, i) => <NavItem key={item.to} {...item} active={pathname === item.to} delay={i * 50} />)}
 
             <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Billing
             </div>
-            {nav.slice(1, 3).map((item) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} />)}
+            {nav.slice(1, 3).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 1) * 50} />)}
 
             <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Masters
             </div>
-            {nav.slice(3, 6).map((item) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} />)}
+            {nav.slice(3, 6).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 3) * 50} />)}
 
             <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Insights
             </div>
-            {nav.slice(6, 7).map((item) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} />)}
+            {nav.slice(6, 7).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 6) * 50} />)}
 
             <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Account
             </div>
-            {nav.slice(7).map((item) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} />)}
+            {nav.slice(7).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 7) * 50} />)}
           </nav>
 
           {/* Footer */}
@@ -105,21 +107,27 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 function NavItem({
-  to, label, icon: Icon, active,
-}: { to: string; label: string; icon: typeof Receipt; active: boolean }) {
+  to, label, icon: Icon, active, delay = 0,
+}: { to: string; label: string; icon: typeof Receipt; active: boolean; delay?: number }) {
   return (
     <Link
       to={to}
+      style={{ "--delay": `${delay}ms` } as React.CSSProperties}
       className={
-        "group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all " +
+        "group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all nav-item-animate stagger icon-bounce " +
         (active
-          ? "gradient-primary text-primary-foreground shadow-glow liquid-btn"
+          ? "gradient-primary gradient-animated text-primary-foreground shadow-glow liquid-btn"
           : "text-foreground/80 hover:bg-accent hover:text-accent-foreground hover-lift")
       }
     >
       <Icon className={"size-4 transition-transform group-hover:scale-110 " + (active ? "" : "text-muted-foreground")} />
       <span>{label}</span>
-      {active && <span className="ml-auto size-1.5 rounded-full bg-primary-foreground/80" />}
+      {active && (
+        <span className="ml-auto relative flex size-2">
+          <span className="ping-ring absolute inline-flex h-full w-full rounded-full bg-primary-foreground/60" />
+          <span className="relative inline-flex size-2 rounded-full bg-primary-foreground/80" />
+        </span>
+      )}
     </Link>
   );
 }

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Eye, EyeOff, Lock, Mail, ShieldCheck, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { SlnLogo } from "@/components/sln-logo";
-import { signIn, useSettings } from "@/lib/store";
+import { setAuthState, useSettings } from "@/lib/store";
+import { authAPI } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -23,30 +24,39 @@ function Login() {
   const [showPwd, setShowPwd] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       toast.error("Email and password are required");
       return;
     }
     setBusy(true);
-    setTimeout(() => {
-      const user = signIn(email, password);
-      if (user) {
+    try {
+      const response = await authAPI.login({ email, password });
+      if (response.success) {
+        setAuthState({
+          isAuthed: true,
+          user: response.user,
+          settings: response.settings,
+          shops: response.shops,
+        });
         toast.success("Welcome back!");
         navigate({ to: "/dashboard" });
-      } else {
-        toast.error("Invalid email or password!");
       }
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error("Invalid email or password!");
+    } finally {
       setBusy(false);
-    }, 500);
+    }
   }
 
   return (
     <div className="relative min-h-screen overflow-hidden mesh-bg flex items-center justify-center p-4">
       {/* Animated gradient blobs */}
-      <div className="pointer-events-none absolute -top-32 -left-32 size-[460px] rounded-full bg-primary/30 blur-3xl animate-pulse" />
-      <div className="pointer-events-none absolute -bottom-40 -right-32 size-[520px] rounded-full bg-brand/25 blur-3xl animate-pulse [animation-delay:1s]" />
+      <div className="pointer-events-none absolute -top-32 -left-32 size-[460px] rounded-full bg-primary/25 blur-3xl animate-float" />
+      <div className="pointer-events-none absolute -bottom-40 -right-32 size-[520px] rounded-full bg-brand/20 blur-3xl animate-float-slow" />
+      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[300px] rounded-full bg-gradient-to-br from-primary/10 to-brand/10 blur-3xl animate-float" />
 
       <div className="relative w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="rounded-3xl glass shadow-elegant p-8 sm:p-10 card-hover">
@@ -67,7 +77,7 @@ function Login() {
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="sln@gmail.com or vinayaka@gmail.com"
+                placeholder="sln@gmail.com"
                 autoComplete="email"
                 type="email"
                 className="w-full bg-transparent outline-none text-sm input-fancy"
@@ -95,14 +105,6 @@ function Login() {
               {busy ? "Signing in…" : "Sign in"}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </button>
-
-            <div className="mt-4 text-xs text-muted-foreground">
-              <p className="font-medium mb-1">Available users:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>sln@gmail.com / 123456 (SLN shop)</li>
-                <li>vinayaka@gmail.com / 123456 (Vinayaka shop)</li>
-              </ul>
-            </div>
           </form>
         </div>
         <p className="mt-4 text-center text-[11px] text-muted-foreground">

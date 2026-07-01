@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, Eye, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { openMenu } from "./_app";
-import { deleteBill, saveBill, useBills, useSettings, newId, advanceBillNumber, nextBillNumber, type Bill } from "@/lib/store";
+import { useBills, useSettings, type Bill } from "@/lib/store";
 import { formatINR } from "@/lib/format";
 import { BillPrint } from "@/components/bill-print";
+import { billsAPI } from "@/lib/bills";
 
 export const Route = createFileRoute("/_app/billing/history")({
   head: () => ({
@@ -19,45 +20,79 @@ export const Route = createFileRoute("/_app/billing/history")({
 });
 
 function BillHistory() {
-  const [bills] = useBills();
+  const [bills, setBills] = useBills();
   const [settings] = useSettings();
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [preview, setPreview] = useState<Bill | null>(null);
   const [confirmDel, setConfirmDel] = useState<Bill | null>(null);
-  
+  const [loading, setLoading] = useState(true);
+
   function getShopForBill(bill: Bill) {
-    return settings.shops.find(s => s.id === bill.shopId) || settings.shops[0];
+    return settings.shops?.find(s => s.id === bill.shopId) || settings.shops?.[0] || { id: "default", name: "", address: "", phone: "", tin: "" };
   }
 
-  const filtered = useMemo(() => {
-    return bills.filter((b) => {
-      if (q && !(b.number.toLowerCase().includes(q.toLowerCase()) || b.customerSnapshot.name.toLowerCase().includes(q.toLowerCase()))) return false;
-      const d = new Date(b.date).getTime();
-      if (from && d < new Date(from).getTime()) return false;
-      if (to && d > new Date(to).getTime() + 86400000) return false;
-      return true;
-    });
-  }, [bills, q, from, to]);
-
-  function duplicate(b: Bill) {
-    const copy: Bill = { 
-      ...b, 
-      id: newId(), 
-      number: nextBillNumber(), 
-      createdAt: new Date().toISOString(), 
-      date: new Date().toISOString(),
-      shopId: b.shopId || settings.selectedShopId 
+  useEffect(() => {
+    const loadBills = async () => {
+      try {
+        const params: any = {};
+        if (q) params.q = q;
+        if (from) params.from = from;
+        if (to) params.to = to;
+        const data = await billsAPI.getAll(params);
+        setBills(data);
+      } catch (error) {
+        console.error("Failed to load bills:", error);
+        toast.error("Failed to load bills");
+      } finally {
+        setLoading(false);
+      }
     };
-    saveBill(copy);
-    advanceBillNumber();
-    toast.success("Bill duplicated as " + copy.number);
+    loadBills();
+  }, [q, from, to]);
+
+  const filtered = useMemo(() => {
+    return bills; // Already filtered by API
+  }, [bills]);
+
+  const duplicate = async (b: Bill) => {
+    try {
+      const result = await billsAPI.duplicate(b.id);
+      if (result.success) {
+        setBills((prev) => [result.bill, ...prev]);
+        toast.success("Bill duplicated as " + result.bill.number);
+      }
+    } catch (error) {
+      console.error("Failed to duplicate bill:", error);
+      toast.error("Failed to duplicate bill");
+    }
+  };
+
+  const deleteBillConfirm = async () => {
+    if (!confirmDel) return;
+    try {
+      await billsAPI.delete(confirmDel.id);
+      setBills((prev) => prev.filter((x) => x.id !== confirmDel.id));
+      toast.success("Bill deleted");
+      setConfirmDel(null);
+    } catch (error) {
+      console.error("Failed to delete bill:", error);
+      toast.error("Failed to delete bill");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <>
-      <PageHeader title="Bill History" subtitle={`${filtered.length} of ${bills.length} bills`} onOpenMenu={openMenu} />
+      <PageHeader title="Bill History" subtitle={`${filtered.length} bills`} onOpenMenu={openMenu} />
 
       <section className="rounded-2xl bg-card border border-border/60 p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
         <label className="md:col-span-2 flex items-center gap-2 rounded-xl border border-input bg-card/60 px-3.5 py-2.5">
@@ -125,7 +160,7 @@ function BillHistory() {
           title="Delete this bill?"
           message={`Bill ${confirmDel.number} for ${confirmDel.customerSnapshot.name || "—"} will be permanently removed.`}
           onCancel={() => setConfirmDel(null)}
-          onConfirm={() => { deleteBill(confirmDel.id); toast.success("Bill deleted"); setConfirmDel(null); }}
+          onConfirm={deleteBillConfirm}
         />
       )}
     </>

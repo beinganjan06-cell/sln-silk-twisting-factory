@@ -4,7 +4,8 @@ import { Download, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { openMenu } from "./_app";
-import { applyTheme, useSettings } from "@/lib/store";
+import { applyTheme, useSettings, saveSettings } from "@/lib/store";
+import { settingsAPI } from "@/lib/settings";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
@@ -19,11 +20,22 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsPage() {
   const [settings, setSettings] = useSettings();
   const [s, setS] = useState(settings);
+  const [busy, setBusy] = useState(false);
 
-  function save() {
-    setSettings(s);
-    applyTheme(s.theme);
-    toast.success("Settings saved");
+  async function save() {
+    setBusy(true);
+    try {
+      const result = await settingsAPI.update(s);
+      if (result.success) {
+        saveSettings(result.settings);
+        toast.success("Settings saved");
+      }
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      toast.error("Failed to save settings");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function backup() {
@@ -58,7 +70,7 @@ function SettingsPage() {
         title="Settings"
         onOpenMenu={openMenu}
         actions={
-          <button onClick={save} className="inline-flex items-center gap-2 rounded-xl gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow">
+          <button onClick={save} disabled={busy} className="inline-flex items-center gap-2 rounded-xl gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow disabled:opacity-70">
             <Save className="size-4" /> Save changes
           </button>
         }
@@ -80,8 +92,8 @@ function SettingsPage() {
         <Card title="Billing">
           <Grid>
             <L label="Bill prefix"><I value={s.billPrefix} onChange={(e) => setS({ ...s, billPrefix: e.target.value })} /></L>
-            <L label="Next bill number"><I type="number" value={s.nextBillNumber} onChange={(e) => setS({ ...s, nextBillNumber: parseInt(e.target.value || "1") })} /></L>
-            <L label="Default GST %"><I type="number" step="0.5" value={s.defaultGst} onChange={(e) => setS({ ...s, defaultGst: parseFloat(e.target.value || "0") })} /></L>
+            <L label="Next bill number"><I type="number" value={s.nextBillNumber} onChange={(e) => setS({ ...s, nextBillNumber: parseInt(e.target.value || "1")})} /></L>
+            <L label="Default GST %"><I type="number" step="0.5" value={s.defaultGst} onChange={(e) => setS({ ...s, defaultGst: parseFloat(e.target.value || "0")})} /></L>
             <L label="Currency"><I value={s.currency} onChange={(e) => setS({ ...s, currency: e.target.value })} /></L>
           </Grid>
         </Card>

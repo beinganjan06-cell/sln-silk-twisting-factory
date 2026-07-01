@@ -1,6 +1,6 @@
 // Lightweight localStorage-backed data layer with a pub/sub hook.
 // All entities live under the `sln.*` key namespace.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type Unit = "Kg" | "Gram" | "Piece" | "Bundle" | "Cone" | "Box" | "Roll" | string;
 
@@ -67,7 +67,6 @@ export interface Bill {
 export interface User {
   id: string;
   email: string;
-  password: string;
   defaultShopId: string;
 }
 
@@ -95,10 +94,7 @@ export interface Settings {
   theme: "light" | "dark";
   bank: string;
   upi: string;
-  shops: Shop[];
   selectedShopId: string;
-  users: User[];
-  currentUserId: string | null;
 }
 
 const KEY = {
@@ -147,131 +143,27 @@ const DEFAULT_SETTINGS: Settings = {
   theme: "light",
   bank: "",
   upi: "",
-  shops: [
-    {
-      id: "shop-sln",
-      name: "Sri Lakshmi Narasimhaswamy Silk Twisting Factory",
-      address: "Hosapet Road, Magadi Town - 562 120, Ramanagaram Dist.",
-      phone: "94480 17596",
-      tin: "29510839729",
-      logoVariant: "sln",
-    },
-    {
-      id: "shop-vinayaka",
-      name: "Sri Vinayaka Silk Twisting Factory",
-      address: "Hosapet Main Road, Magadi Town - 562 120, Ramanagaram Dist.",
-      phone: "94480 17596",
-      tin: "29510839729",
-      logoVariant: "vinayaka",
-    },
-  ],
   selectedShopId: "shop-sln",
-  users: [
-    {
-      id: "user-sln",
-      email: "sln@gmail.com",
-      password: "123456",
-      defaultShopId: "shop-sln",
-    },
-    {
-      id: "user-vinayaka",
-      email: "vinayaka@gmail.com",
-      password: "123456",
-      defaultShopId: "shop-vinayaka",
-    },
-  ],
-  currentUserId: null,
 };
 
 const DEFAULT_UNITS: Unit[] = ["Kg", "Gram", "Piece", "Bundle", "Cone", "Box", "Roll"];
 const DEFAULT_CATEGORIES = ["Silk Yarn", "Twisted Silk", "Raw Material", "Finished Goods"];
 
-function seedIfEmpty() {
-  if (typeof window === "undefined") return;
-  
-  // Ensure we always have both shops and both users with fixed IDs!
-  const existingSettings = read(KEY.settings, null);
-  const finalShops = [
-    {
-      id: "shop-sln",
-      name: "Sri Lakshmi Narasimhaswamy Silk Twisting Factory",
-      address: "Hosapet Road, Magadi Town - 562 120, Ramanagaram Dist.",
-      phone: "94480 17596",
-      tin: "29510839729",
-      logoVariant: "sln",
-    },
-    {
-      id: "shop-vinayaka",
-      name: "Sri Vinayaka Silk Twisting Factory",
-      address: "Hosapet Main Road, Magadi Town - 562 120, Ramanagaram Dist.",
-      phone: "94480 17596",
-      tin: "29510839729",
-      logoVariant: "vinayaka",
-    },
-  ];
-  
-  const finalUsers = [
-    {
-      id: "user-sln",
-      email: "sln@gmail.com",
-      password: "123456",
-      defaultShopId: "shop-sln",
-    },
-    {
-      id: "user-vinayaka",
-      email: "vinayaka@gmail.com",
-      password: "123456",
-      defaultShopId: "shop-vinayaka",
-    },
-  ];
-  
-  if (existingSettings) {
-    write(KEY.settings, {
-      ...existingSettings,
-      shops: finalShops,
-      users: finalUsers,
-      selectedShopId: existingSettings.selectedShopId || "shop-sln",
-    });
-  } else {
-    write(KEY.settings, DEFAULT_SETTINGS);
-  }
-  
-  if (!localStorage.getItem(KEY.units)) write(KEY.units, DEFAULT_UNITS);
-  if (!localStorage.getItem(KEY.categories)) write(KEY.categories, DEFAULT_CATEGORIES);
-  if (!localStorage.getItem(KEY.products)) {
-    const now = new Date().toISOString();
-    const sample: Product[] = [
-      { id: uid(), name: "Pure Silk Yarn 20/22D", code: "SLK-2022", category: "Silk Yarn", unit: "Kg", rate: 4200, gst: 5, hsn: "5004", active: true, createdAt: now },
-      { id: uid(), name: "Twisted Silk 2-Ply", code: "TWS-2P", category: "Twisted Silk", unit: "Kg", rate: 4650, gst: 5, hsn: "5004", active: true, createdAt: now },
-      { id: uid(), name: "Twisted Silk 3-Ply", code: "TWS-3P", category: "Twisted Silk", unit: "Kg", rate: 4850, gst: 5, hsn: "5004", active: true, createdAt: now },
-      { id: uid(), name: "Silk Cone 500g", code: "CONE-500", category: "Finished Goods", unit: "Cone", rate: 2400, gst: 5, hsn: "5004", active: true, createdAt: now },
-    ];
-    write(KEY.products, sample);
-  }
-  if (!localStorage.getItem(KEY.customers)) {
-    const sample: Customer[] = [
-      { id: uid(), name: "Sri Venkateshwara Silks", phone: "9845012345", address: "Kanakapura Road, Bangalore", gstNumber: "29ABCDE1234F1Z5", tinNumber: "29510111111", state: "Karnataka", district: "Bangalore", balance: 0, active: true },
-      { id: uid(), name: "Lakshmi Weavers", phone: "9900112233", address: "Channapatna", gstNumber: "", tinNumber: "29510222222", state: "Karnataka", district: "Ramanagaram", balance: 12500, active: true },
-    ];
-    write(KEY.customers, sample);
-  }
-  if (!localStorage.getItem(KEY.bills)) write(KEY.bills, []);
-}
-
-if (typeof window !== "undefined") seedIfEmpty();
-
 // ----- Hooks -----
+
 function useStored<T>(key: string, fallback: T): [T, (next: T | ((p: T) => T)) => void] {
   const [val, setVal] = useState<T>(() => read(key, fallback));
   useEffect(() => {
     const l = () => setVal(read(key, fallback));
     listeners.add(l);
     return () => { listeners.delete(l); };
-  }, [key]); // eslint-disable-line
-  const setter = (next: T | ((p: T) => T)) => {
+  }, [key, fallback]); 
+  
+  const setter = useCallback((next: T | ((p: T) => T)) => {
     const value = typeof next === "function" ? (next as (p: T) => T)(read(key, fallback)) : next;
     write(key, value);
-  };
+  }, [key, fallback]);
+  
   return [val, setter];
 }
 
@@ -287,6 +179,20 @@ export const getSettings = () => read<Settings>(KEY.settings, DEFAULT_SETTINGS);
 export const getProducts = () => read<Product[]>(KEY.products, []);
 export const getCustomers = () => read<Customer[]>(KEY.customers, []);
 export const getBills = () => read<Bill[]>(KEY.bills, []);
+
+export function saveProducts(products: Product[]) {
+  write(KEY.products, products);
+}
+export function saveCustomers(customers: Customer[]) {
+  write(KEY.customers, customers);
+}
+export function saveBills(bills: Bill[]) {
+  write(KEY.bills, bills);
+}
+export function saveSettings(settings: Settings) {
+  write(KEY.settings, settings);
+  applyTheme(settings.theme);
+}
 
 export function nextBillNumber(): string {
   const s = getSettings();
@@ -312,54 +218,47 @@ export function deleteBill(id: string) {
 export const newId = uid;
 
 // ----- Auth (with users) -----
-export function getCurrentUser(settings?: Settings): User | null {
-  const s = settings || getSettings();
-  if (!s.currentUserId) return null;
-  return s.users.find(u => u.id === s.currentUserId) || null;
+export interface AuthState {
+  isAuthed: boolean;
+  user: User | null;
+  settings: Settings | null;
+  shops: Shop[];
+}
+const DEFAULT_AUTH_STATE: AuthState = {
+  isAuthed: false,
+  user: null,
+  settings: null,
+  shops: [],
+};
+
+export function getAuthState(): AuthState {
+  return read<AuthState>(KEY.auth, DEFAULT_AUTH_STATE);
+}
+export function setAuthState(authState: AuthState) {
+  write(KEY.auth, authState);
+  if (authState.settings) {
+    write(KEY.settings, authState.settings);
+    applyTheme(authState.settings.theme);
+  }
 }
 export function isAuthed(): boolean {
-  if (typeof window === "undefined") return false;
-  const s = getSettings();
-  return !!s.currentUserId;
-}
-export function signIn(email: string, password: string): User | null {
-  const s = getSettings();
-  const user = s.users.find(u => u.email === email && u.password === password);
-  if (user) {
-    write(KEY.settings, {
-      ...s,
-      currentUserId: user.id,
-      selectedShopId: user.defaultShopId,
-    });
-    return user;
-  }
-  return null;
+  return getAuthState().isAuthed;
 }
 export function signOut() {
-  const s = getSettings();
-  write(KEY.settings, {
-    ...s,
-    currentUserId: null,
-  });
+  setAuthState(DEFAULT_AUTH_STATE);
 }
 export function useAuth() {
-  const [authed, setAuthed] = useState<boolean>(() => isAuthed());
-  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [authState, setAuthState] = useState<AuthState>(() => getAuthState());
   useEffect(() => {
-    const l = () => {
-      setAuthed(isAuthed());
-      setCurrentUser(getCurrentUser());
-    };
+    const l = () => setAuthState(getAuthState());
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, []);
-  return { authed, currentUser };
+  return authState;
 }
 
 // ----- Theme -----
 export function applyTheme(theme: "light" | "dark") {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", theme === "dark");
-  const s = getSettings();
-  write(KEY.settings, { ...s, theme });
 }

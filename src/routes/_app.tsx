@@ -8,20 +8,25 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  const authed = useAuth();
+  const authState = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!authed) navigate({ to: "/login", replace: true });
-  }, [authed, navigate]);
+    if (mounted && !authState.isAuthed) navigate({ to: "/login", replace: true });
+  }, [authState.isAuthed, navigate, mounted]);
 
-  if (!authed) return null;
+  // Avoid SSR/client hydration mismatch — render nothing until client mounts
+  if (!mounted) return null;
+  if (!authState.isAuthed) return null;
 
   return (
     <div className="mesh-bg min-h-screen flex">
       <AppSidebar open={open} onClose={() => setOpen(false)} />
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 animate-in fade-in duration-300">
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 page-animate">
         <Outlet />
       </main>
       <MenuContext.Provider />

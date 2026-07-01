@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { openMenu } from "./_app";
-import { newId, useCustomers, type Customer } from "@/lib/store";
+import { useCustomers, type Customer } from "@/lib/store";
 import { formatINR } from "@/lib/format";
 import { Confirm } from "./_app.billing.history";
+import { customersAPI } from "@/lib/customers";
 
 export const Route = createFileRoute("/_app/customers")({
   head: () => ({
@@ -27,6 +28,22 @@ function CustomersPage() {
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [confirmDel, setConfirmDel] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const data = await customersAPI.getAll();
+        setItems(data);
+      } catch (error) {
+        console.error("Failed to load customers:", error);
+        toast.error("Failed to load customers");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadCustomers();
+  }, []);
 
   const filtered = useMemo(() => items.filter((c) =>
     c.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -34,11 +51,48 @@ function CustomersPage() {
     c.tinNumber.includes(q)
   ), [items, q]);
 
-  function save(c: Customer) {
+  const save = async (c: Customer) => {
     if (!c.name.trim()) { toast.error("Customer name is required"); return; }
-    setItems((prev) => c.id ? prev.map((x) => x.id === c.id ? c : x) : [{ ...c, id: newId() }, ...prev]);
-    toast.success(c.id ? "Customer updated" : "Customer added");
-    setEditing(null);
+    try {
+      if (c.id) {
+        const result = await customersAPI.update(c.id, c);
+        if (result.success) {
+          setItems((prev) => prev.map((x) => x.id === c.id ? result.customer : x));
+          toast.success("Customer updated");
+        }
+      } else {
+        const result = await customersAPI.create(c);
+        if (result.success) {
+          setItems((prev) => [result.customer, ...prev]);
+          toast.success("Customer added");
+        }
+      }
+      setEditing(null);
+    } catch (error) {
+      console.error("Failed to save customer:", error);
+      toast.error("Failed to save customer");
+    }
+  };
+
+  const deleteCustomer = async () => {
+    if (!confirmDel) return;
+    try {
+      await customersAPI.delete(confirmDel.id);
+      setItems((prev) => prev.filter((x) => x.id !== confirmDel.id));
+      toast.success("Customer deleted");
+      setConfirmDel(null);
+    } catch (error) {
+      console.error("Failed to delete customer:", error);
+      toast.error("Failed to delete customer");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -98,7 +152,7 @@ function CustomersPage() {
           title="Delete this customer?"
           message={`${confirmDel.name} will be permanently removed.`}
           onCancel={() => setConfirmDel(null)}
-          onConfirm={() => { setItems((prev) => prev.filter((x) => x.id !== confirmDel.id)); toast.success("Deleted"); setConfirmDel(null); }}
+          onConfirm={deleteCustomer}
         />
       )}
     </>

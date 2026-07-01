@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { openMenu } from "./_app";
-import { newId, useCategories, useProducts, useUnits, type Product } from "@/lib/store";
+import { useCategories, useProducts, useUnits, type Product } from "@/lib/store";
 import { formatINR } from "@/lib/format";
 import { Confirm } from "./_app.billing.history";
+import { productsAPI } from "@/lib/products";
 
 export const Route = createFileRoute("/_app/products")({
   head: () => ({
@@ -30,18 +31,71 @@ function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [confirmDel, setConfirmDel] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const pageSize = 10;
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const data = await productsAPI.getAll();
+        setItems(data);
+      } catch (error) {
+        console.error("Failed to load products:", error);
+        toast.error("Failed to load products");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProducts();
+  }, []);
 
   const filtered = useMemo(() => items.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())), [items, q]);
   const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
-  function save(p: Product) {
+  const save = async (p: Product) => {
     if (!p.name.trim()) { toast.error("Product name is required"); return; }
     if (p.rate < 0) { toast.error("Rate cannot be negative"); return; }
-    setItems((prev) => p.id ? prev.map((x) => x.id === p.id ? p : x) : [{ ...p, id: newId(), createdAt: new Date().toISOString() }, ...prev]);
-    toast.success(p.id ? "Product updated" : "Product added");
-    setEditing(null);
+    try {
+      if (p.id) {
+        const result = await productsAPI.update(p.id, p);
+        if (result.success) {
+          setItems((prev) => prev.map((x) => x.id === p.id ? result.product : x));
+          toast.success("Product updated");
+        }
+      } else {
+        const result = await productsAPI.create(p);
+        if (result.success) {
+          setItems((prev) => [result.product, ...prev]);
+          toast.success("Product added");
+        }
+      }
+      setEditing(null);
+    } catch (error) {
+      console.error("Failed to save product:", error);
+      toast.error("Failed to save product");
+    }
+  };
+
+  const deleteProduct = async () => {
+    if (!confirmDel) return;
+    try {
+      await productsAPI.delete(confirmDel.id);
+      setItems((prev) => prev.filter((x) => x.id !== confirmDel.id));
+      toast.success("Product deleted");
+      setConfirmDel(null);
+    } catch (error) {
+      console.error("Failed to delete product:", error);
+      toast.error("Failed to delete product");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -132,7 +186,7 @@ function ProductsPage() {
           title="Delete this product?"
           message={`"${confirmDel.name}" will be permanently removed from the master.`}
           onCancel={() => setConfirmDel(null)}
-          onConfirm={() => { setItems((prev) => prev.filter((x) => x.id !== confirmDel.id)); toast.success("Deleted"); setConfirmDel(null); }}
+          onConfirm={deleteProduct}
         />
       )}
     </>
