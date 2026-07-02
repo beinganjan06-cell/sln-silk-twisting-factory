@@ -28,7 +28,7 @@ const TESTS: { name: string; url: string; method: string; body?: object }[] = [
   { name: "Get Bills",         url: `${BASE}/bills`,            method: "GET" },
 ];
 
-export default function ApiTestPage() {
+function ApiTestPage() {
   const [results, setResults] = useState<TestResult[]>(
     TESTS.map((t) => ({ name: t.name, url: t.url, method: t.method, status: "pending" }))
   );

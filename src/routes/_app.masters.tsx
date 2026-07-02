@@ -3,7 +3,9 @@ import { useState } from "react";
 import { Plus, Trash2, Tags, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { openMenu } from "./_app";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useCategories, useUnits } from "@/lib/store";
 
 export const Route = createFileRoute("/_app/masters")({
@@ -21,7 +23,7 @@ function Masters() {
   const [units, setUnits] = useUnits();
   return (
     <>
-      <PageHeader title="Masters" subtitle="Categories &amp; units" onOpenMenu={openMenu} />
+      <PageHeader title="Masters" subtitle="Categories & units for product master" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ListCard
           title="Categories"
@@ -49,26 +51,47 @@ function ListCard({
 }: { title: string; icon: typeof Tags; values: string[]; onAdd: (v: string) => void; onRemove: (v: string) => void; placeholder: string }) {
   const [val, setVal] = useState("");
   return (
-    <div className="rounded-2xl bg-card border border-border/60 p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="rounded-xl p-2 gradient-primary text-primary-foreground"><Icon className="size-4" /></div>
-        <h2 className="font-display font-bold text-lg">{title}</h2>
-        <span className="ml-auto text-xs text-muted-foreground">{values.length} items</span>
-      </div>
-      <form className="flex gap-2 mb-3" onSubmit={(e) => { e.preventDefault(); if (!val.trim()) return; onAdd(val.trim()); setVal(""); toast.success("Added"); }}>
-        <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder} className="flex-1 rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-        <button className="inline-flex items-center gap-1.5 rounded-xl gradient-primary text-primary-foreground px-4 py-2 text-sm font-semibold shadow-glow"><Plus className="size-4" /> Add</button>
-      </form>
-      <div className="flex flex-wrap gap-2">
-        {values.map((v) => (
-          <span key={v} className="group inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-medium">
-            {v}
-            <button onClick={() => { onRemove(v); toast.success("Removed"); }} className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity">
-              <Trash2 className="size-3" />
-            </button>
+    <Card className="card-hover">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl p-2.5 gradient-primary text-white">
+            <Icon className="size-4" />
+          </div>
+          <CardTitle>{title}</CardTitle>
+          <span className="ml-auto text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+            {values.length} items
           </span>
-        ))}
-      </div>
-    </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex gap-2 mb-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!val.trim()) return;
+            onAdd(val.trim());
+            setVal("");
+            toast.success("Added");
+          }}
+        >
+          <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder} className="flex-1" />
+          <Button type="submit"><Plus className="size-4" /> Add</Button>
+        </form>
+        <div className="flex flex-wrap gap-2">
+          {values.map((v) => (
+            <span key={v} className="group inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold border border-border/60">
+              {v}
+              <button
+                onClick={() => { onRemove(v); toast.success("Removed"); }}
+                className="opacity-0 group-hover:opacity-100 text-destructive transition-opacity"
+                aria-label={`Remove ${v}`}
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

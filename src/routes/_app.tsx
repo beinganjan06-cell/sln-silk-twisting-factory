@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar, useSidebarCollapsed } from "@/components/app-sidebar";
+import { TopNavbar } from "@/components/top-navbar";
 import { useAuth } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -12,6 +14,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const { collapsed, toggle: toggleCollapse } = useSidebarCollapsed();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -19,24 +22,28 @@ function AppLayout() {
     if (mounted && !authState.isAuthed) navigate({ to: "/login", replace: true });
   }, [authState.isAuthed, navigate, mounted]);
 
-  // Avoid SSR/client hydration mismatch — render nothing until client mounts
   if (!mounted) return null;
   if (!authState.isAuthed) return null;
 
   return (
     <div className="mesh-bg min-h-screen flex">
-      <AppSidebar open={open} onClose={() => setOpen(false)} />
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 page-animate">
-        <Outlet />
-      </main>
-      <MenuContext.Provider />
-      {/* Expose menu open through portal: simple trick — children read via context-less prop drilling */}
+      <AppSidebar
+        open={open}
+        onClose={() => setOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapse}
+      />
+      <div className={cn("flex-1 flex flex-col min-w-0 transition-all duration-300")}>
+        <TopNavbar onOpenMenu={() => setOpen(true)} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 page-animate overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
       <MenuPortal onOpen={() => setOpen(true)} />
     </div>
   );
 }
 
-// Tiny custom event for child pages to open the sidebar without prop drilling.
 function MenuPortal({ onOpen }: { onOpen: () => void }) {
   useEffect(() => {
     const h = () => onOpen();
@@ -45,8 +52,5 @@ function MenuPortal({ onOpen }: { onOpen: () => void }) {
   }, [onOpen]);
   return null;
 }
-
-// Placeholder to satisfy import; real menu actions dispatch the event.
-const MenuContext = { Provider: () => null };
 
 export const openMenu = () => window.dispatchEvent(new CustomEvent("sln:open-menu"));

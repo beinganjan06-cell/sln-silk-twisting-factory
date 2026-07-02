@@ -1,13 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { openMenu } from "./_app";
-import { useCategories, useProducts, useUnits, type Product } from "@/lib/store";
-import { formatINR } from "@/lib/format";
-import { Confirm } from "./_app.billing.history";
+import { SearchInput } from "@/components/search-input";
+import { PageLoading } from "@/components/page-loading";
+import { EmptyState } from "@/components/empty-state";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Pagination, SortTh } from "@/components/table-controls";
+import { useCategories, useUnits, type Product } from "@/lib/store";
 import { productsAPI } from "@/lib/products";
+import { formatINR } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/products")({
   head: () => ({
@@ -24,34 +30,48 @@ function blank(): Product {
 }
 
 function ProductsPage() {
-  const [items, setItems] = useProducts();
   const [categories] = useCategories();
   const [units] = useUnits();
+
+  const [items, setItems] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [editing, setEditing] = useState<Product | null>(null);
   const [confirmDel, setConfirmDel] = useState<Product | null>(null);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const pageSize = 10;
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSort(col: string) {
+    if (sortBy === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(col); setSortDir("asc"); }
+    setPage(1);
+  }
 
   useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const data = await productsAPI.getAll();
-        setItems(data);
-      } catch (error) {
-        console.error("Failed to load products:", error);
-        toast.error("Failed to load products");
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadProducts();
-  }, []);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(load, q ? 350 : 0);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [q, page, perPage, sortBy, sortDir]);
 
-  const filtered = useMemo(() => items.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase())), [items, q]);
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await productsAPI.getAll({ q, page, perPage, sortBy, sortDir });
+      setItems(res.data);
+      setTotal(res.total);
+      setPages(res.pages);
+    } catch {
+      toast.error("Failed to load products");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const save = async (p: Product) => {
     if (!p.name.trim()) { toast.error("Product name is required"); return; }
@@ -59,20 +79,14 @@ function ProductsPage() {
     try {
       if (p.id) {
         const result = await productsAPI.update(p.id, p);
-        if (result.success) {
-          setItems((prev) => prev.map((x) => x.id === p.id ? result.product : x));
-          toast.success("Product updated");
-        }
+        if (result.success) toast.success("Product updated");
       } else {
         const result = await productsAPI.create(p);
-        if (result.success) {
-          setItems((prev) => [result.product, ...prev]);
-          toast.success("Product added");
-        }
+        if (result.success) toast.success("Product added");
       }
       setEditing(null);
-    } catch (error) {
-      console.error("Failed to save product:", error);
+      load();
+    } catch {
       toast.error("Failed to save product");
     }
   };
@@ -81,62 +95,51 @@ function ProductsPage() {
     if (!confirmDel) return;
     try {
       await productsAPI.delete(confirmDel.id);
-      setItems((prev) => prev.filter((x) => x.id !== confirmDel.id));
       toast.success("Product deleted");
       setConfirmDel(null);
-    } catch (error) {
-      console.error("Failed to delete product:", error);
+      load();
+    } catch {
       toast.error("Failed to delete product");
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <>
       <PageHeader
         title="Products"
-        subtitle={`${items.length} items in master`}
-        onOpenMenu={openMenu}
+        subtitle={`${total} items in master`}
         actions={
-          <button onClick={() => setEditing(blank())} className="inline-flex items-center gap-2 rounded-xl gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow">
+          <Button onClick={() => setEditing(blank())}>
             <Plus className="size-4" /> Add product
-          </button>
+          </Button>
         }
       />
 
-      <div className="rounded-2xl bg-card border border-border/60 p-4 mb-4">
-        <label className="flex items-center gap-2 rounded-xl border border-input bg-card/60 px-3.5 py-2.5">
-          <Search className="size-4 text-muted-foreground" />
-          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search products…" className="w-full bg-transparent outline-none text-sm" />
-        </label>
-      </div>
+      <Card className="p-4 mb-4">
+        <SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Search products…" />
+      </Card>
 
-      <div className="rounded-2xl bg-card border border-border/60 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground">
+            <thead className="text-xs uppercase tracking-wider sticky top-0" style={{ background: "linear-gradient(135deg, #122658 0%, #132D6A 50%, #1B3F8A 100%)", color: "#E4C457" }}>
               <tr>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Code</th>
-                <th className="px-4 py-3 text-left">Category</th>
+                <SortTh col="name" label="Name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left" />
+                <SortTh col="code" label="Code" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left" />
+                <SortTh col="category" label="Category" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left" />
                 <th className="px-4 py-3 text-left">Unit</th>
-                <th className="px-4 py-3 text-right">Rate</th>
-                <th className="px-4 py-3 text-right">GST</th>
+                <SortTh col="rate" label="Rate" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-right" />
+                <SortTh col="gst" label="GST" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-right" />
                 <th className="px-4 py-3 text-left">HSN</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {paged.map((p) => (
-                <tr key={p.id} className="border-t border-border/60 hover:bg-accent/30">
+              {loading ? (
+                <tr><td colSpan={9}><PageLoading label="Loading products…" /></td></tr>
+              ) : items.map((p) => (
+                <tr key={p.id} className="border-t border-border/60 table-row-hover">
                   <td className="px-4 py-3 font-semibold">{p.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.code}</td>
                   <td className="px-4 py-3">{p.category}</td>
@@ -145,32 +148,26 @@ function ProductsPage() {
                   <td className="px-4 py-3 text-right tabular-nums">{p.gst}%</td>
                   <td className="px-4 py-3">{p.hsn || "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={"inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold " + (p.active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
+                    <Badge variant={p.active ? "success" : "cancelled"}>
                       {p.active ? "Active" : "Inactive"}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => setEditing(p)} className="p-2 rounded-lg hover:bg-accent"><Pencil className="size-4" /></button>
-                      <button onClick={() => setConfirmDel(p)} className="p-2 rounded-lg text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setEditing(p)}><Pencil className="size-4" /></Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setConfirmDel(p)} className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></Button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {paged.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No products yet.</td></tr>}
+              {!loading && items.length === 0 && (
+                <tr><td colSpan={9}><EmptyState title="No products yet" description="Add your first product to get started." action={{ label: "Add product", onClick: () => setEditing(blank()) }} /></td></tr>
+              )}
             </tbody>
           </table>
         </div>
-        {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
-            <div className="text-xs text-muted-foreground">Page {page} of {pages}</div>
-            <div className="flex gap-1">
-              <button disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-input px-3 py-1.5 text-sm disabled:opacity-50 hover:bg-accent">Prev</button>
-              <button disabled={page === pages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-input px-3 py-1.5 text-sm disabled:opacity-50 hover:bg-accent">Next</button>
-            </div>
-          </div>
-        )}
-      </div>
+        <Pagination page={page} pages={pages} total={total} perPage={perPage} onPage={setPage} onPerPage={setPerPage} />
+      </Card>
 
       {editing && (
         <ProductModal
@@ -182,7 +179,7 @@ function ProductsPage() {
         />
       )}
       {confirmDel && (
-        <Confirm
+        <ConfirmDialog
           title="Delete this product?"
           message={`"${confirmDel.name}" will be permanently removed from the master.`}
           onCancel={() => setConfirmDel(null)}
@@ -198,8 +195,8 @@ function ProductModal({
 }: { product: Product; categories: string[]; units: string[]; onCancel: () => void; onSave: (p: Product) => void }) {
   const [p, setP] = useState(product);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 backdrop-blur-sm p-4 animate-in fade-in" onClick={onCancel}>
-      <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-elegant p-6 animate-in zoom-in-95" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 backdrop-blur-md p-4 animate-in fade-in" onClick={onCancel}>
+      <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-elegant p-6 animate-in zoom-in-95 popup-slide-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg font-bold">{product.id ? "Edit product" : "Add product"}</h3>
           <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-accent"><X className="size-4" /></button>
@@ -227,8 +224,8 @@ function ProductModal({
           </L>
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-xl border border-input px-4 py-2 text-sm hover:bg-accent">Cancel</button>
-          <button onClick={() => onSave(p)} className="rounded-xl gradient-primary text-primary-foreground px-4 py-2 text-sm font-semibold shadow-glow">Save</button>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button onClick={() => onSave(p)}>Save</Button>
         </div>
       </div>
     </div>

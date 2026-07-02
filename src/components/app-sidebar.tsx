@@ -1,59 +1,99 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Receipt, FilePlus2, History, Users, Package, Database,
-  BarChart3, Settings as SettingsIcon, UserCircle2, LogOut, Menu, X, Moon, Sun,
+  LayoutDashboard, FilePlus2, History, Users, Package, Database,
+  BarChart3, Settings as SettingsIcon, UserCircle2, LogOut, Menu, X,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SlnLogo } from "./sln-logo";
-import { signOut, useSettings, applyTheme } from "@/lib/store";
+import { signOut, useSettings } from "@/lib/store";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+const navItems = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/billing/create", label: "Create Bill", icon: FilePlus2 },
   { to: "/billing/history", label: "Bill History", icon: History },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/products", label: "Products", icon: Package },
-  { to: "/masters", label: "Masters", icon: Database },
+  { to: "/masters", label: "Categories", icon: Database },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/profile", label: "Profile", icon: UserCircle2 },
 ] as const;
 
-export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+const SIDEBAR_KEY = "sln.sidebar.collapsed";
+
+export function AppSidebar({
+  open,
+  onClose,
+  collapsed,
+  onToggleCollapse,
+}: {
+  open: boolean;
+  onClose: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const [settings] = useSettings();
 
+  const handleLogout = () => {
+    signOut();
+    toast.success("Signed out successfully");
+    navigate({ to: "/login" });
+  };
+
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm lg:hidden animate-in fade-in"
+          className="fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm lg:hidden animate-in fade-in"
           onClick={onClose}
         />
       )}
+
       <aside
-        className={
-          "fixed lg:sticky top-0 z-50 lg:z-auto h-screen w-72 shrink-0 transition-transform duration-300 " +
-          (open ? "translate-x-0" : "-translate-x-full lg:translate-x-0")
-        }
+        className={cn(
+          "fixed lg:sticky top-0 z-50 lg:z-auto h-screen shrink-0 transition-all duration-300 ease-in-out self-start",
+          collapsed ? "w-[72px]" : "w-64",
+          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
       >
-        <div className="h-full m-3 mr-0 lg:mr-3 flex flex-col rounded-3xl glass shadow-elegant overflow-hidden sidebar-glow">
-          {/* Header */}
-          <div className="flex items-center gap-3 p-5 border-b border-border/60">
-            <div className="logo-animate">
-              <SlnLogo size={44} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground">SLN Billing</div>
-              <div className="truncate font-display font-bold text-sm leading-tight">
-                {settings.companyName.split(" ").slice(0, 3).join(" ")}…
+        <div className="h-full flex flex-col bg-sidebar text-sidebar-foreground overflow-hidden">
+          {/* Logo header */}
+          <div
+            className={cn(
+              "flex items-center gap-3 border-b border-sidebar-border shrink-0",
+              collapsed ? "justify-center p-4" : "p-5",
+            )}
+          >
+            <Link to="/dashboard" onClick={onClose} className="logo-animate shrink-0" aria-label="Go to dashboard">
+              <div className="relative">
+                <SlnLogo size={collapsed ? 36 : 40} />
+                <div className="absolute -inset-1 rounded-xl gradient-primary opacity-20 blur-md -z-10" />
               </div>
-            </div>
+            </Link>
+            {!collapsed && (
+              <div className="min-w-0 flex-1 animate-in fade-in slide-in-from-left-2 duration-300">
+                <div className="font-display font-bold text-[13px] leading-snug text-sidebar-foreground">
+                  Sri Lakshmi Narasimhaswamy
+                </div>
+                <div className="text-[11px] font-medium leading-snug text-sidebar-foreground/60">
+                  Silk Twisting Factory
+                </div>
+              </div>
+            )}
             <button
-              className="lg:hidden rounded-lg p-2 hover:bg-accent transition-all"
+              onClick={onToggleCollapse}
+              className="hidden lg:flex rounded-lg p-1.5 hover:bg-sidebar-accent transition-colors text-sidebar-foreground/50 hover:text-sidebar-foreground shrink-0"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </button>
+            <button
+              className="lg:hidden rounded-lg p-1.5 hover:bg-sidebar-accent transition-colors text-sidebar-foreground/70"
               onClick={onClose}
               aria-label="Close menu"
             >
@@ -61,89 +101,64 @@ export function AppSidebar({ open, onClose }: { open: boolean; onClose: () => vo
             </button>
           </div>
 
-          {/* Nav */}
-          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-            <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Workspace
-            </div>
-            {nav.slice(0, 1).map((item, i) => <NavItem key={item.to} {...item} active={pathname === item.to} delay={i * 50} />)}
-
-            <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Billing
-            </div>
-            {nav.slice(1, 3).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 1) * 50} />)}
-
-            <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Masters
-            </div>
-            {nav.slice(3, 6).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 3) * 50} />)}
-
-            <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Insights
-            </div>
-            {nav.slice(6, 7).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 6) * 50} />)}
-
-            <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Account
-            </div>
-            {nav.slice(7).map((item, i) => <NavItem key={item.to} {...item} active={pathname.startsWith(item.to)} delay={(i + 7) * 50} />)}
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-1.5 sidebar-scroll">
+            {navItems.map((item, i) => {
+              const active = "exact" in item && item.exact
+                ? pathname === item.to
+                : pathname.startsWith(item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={onClose}
+                  title={collapsed ? item.label : undefined}
+                  style={{ "--delay": `${i * 40}ms` } as React.CSSProperties}
+                  className={cn(
+                    "group relative flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all duration-200 nav-item-animate stagger h-11 w-full",
+                    collapsed ? "justify-center px-0" : "px-3",
+                    active
+                      ? "sidebar-nav-active text-white"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  )}
+                >
+                  <item.icon
+                    className="size-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110"
+                    style={{ color: "#E4C457" }}
+                  />
+                  {!collapsed && (
+                    <>
+                      <span className="truncate flex-1">{item.label}</span>
+                      {active && (
+                        <span className="size-1.5 rounded-full bg-[#E4C457] shadow-[0_0_8px] shadow-[#E4C457]/60" />
+                      )}
+                    </>
+                  )}
+                  {collapsed && active && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#E4C457]" />
+                  )}
+                </Link>
+              );
+            })}
           </nav>
 
-          {/* Footer */}
-          <div className="border-t border-border/60 p-3 space-y-2">
-            <ThemeToggle />
+          {/* Logout */}
+          <div className="border-t border-sidebar-border px-2 py-2 shrink-0">
             <button
-              onClick={() => { signOut(); toast.success("Signed out"); navigate({ to: "/login" }); }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-all hover-lift"
+              onClick={handleLogout}
+              title={collapsed ? "Logout" : undefined}
+              className={cn(
+                "w-full flex items-center gap-3 rounded-xl text-[15px] font-medium text-red-400 bg-transparent hover:bg-red-500/10 active:bg-red-500/20 transition-all duration-200 h-11",
+                collapsed ? "justify-center px-0" : "px-3",
+              )}
             >
-              <LogOut className="size-4" />
-              Logout
+              <LogOut className="size-[18px] shrink-0" />
+              {!collapsed && <span className="truncate flex-1">Logout</span>}
             </button>
           </div>
         </div>
       </aside>
     </>
-  );
-}
-
-function NavItem({
-  to, label, icon: Icon, active, delay = 0,
-}: { to: string; label: string; icon: typeof Receipt; active: boolean; delay?: number }) {
-  return (
-    <Link
-      to={to}
-      style={{ "--delay": `${delay}ms` } as React.CSSProperties}
-      className={
-        "group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all nav-item-animate stagger icon-bounce " +
-        (active
-          ? "gradient-primary gradient-animated text-primary-foreground shadow-glow liquid-btn"
-          : "text-foreground/80 hover:bg-accent hover:text-accent-foreground hover-lift")
-      }
-    >
-      <Icon className={"size-4 transition-transform group-hover:scale-110 " + (active ? "" : "text-muted-foreground")} />
-      <span>{label}</span>
-      {active && (
-        <span className="ml-auto relative flex size-2">
-          <span className="ping-ring absolute inline-flex h-full w-full rounded-full bg-primary-foreground/60" />
-          <span className="relative inline-flex size-2 rounded-full bg-primary-foreground/80" />
-        </span>
-      )}
-    </Link>
-  );
-}
-
-function ThemeToggle() {
-  const [settings] = useSettings();
-  const [theme, setTheme] = useState<"light" | "dark">(settings.theme);
-  useEffect(() => { applyTheme(theme); }, [theme]);
-  return (
-    <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-accent transition-all hover-lift"
-    >
-      {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
-    </button>
   );
 }
 
@@ -157,4 +172,24 @@ export function MenuButton({ onClick }: { onClick: () => void }) {
       <Menu className="size-5" />
     </button>
   );
+}
+
+export function useSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "true");
+    } catch { /* noop */ }
+  }, []);
+
+  const toggle = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(SIDEBAR_KEY, String(next)); } catch { /* noop */ }
+      return next;
+    });
+  };
+
+  return { collapsed, toggle };
 }

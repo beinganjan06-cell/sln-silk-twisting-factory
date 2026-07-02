@@ -1,14 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Plus, Printer, Save, Trash2, X, FileText, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Eye, Plus, Printer, Save, Trash2, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { openMenu } from "./_app";
+import { PageLoading } from "@/components/page-loading";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   useCustomers, useProducts, useSettings, type Bill, type BillLine, type Shop,
 } from "@/lib/store";
 import { formatINR, numberToIndianWords } from "@/lib/format";
 import { BillPrint } from "@/components/bill-print";
+import { BillPreview } from "@/components/bill-preview";
 import { billsAPI } from "@/lib/bills";
 import { productsAPI } from "@/lib/products";
 import { customersAPI } from "@/lib/customers";
@@ -37,12 +40,15 @@ function CreateBill() {
   const navigate = useNavigate();
 
   const [selectedShopId, setSelectedShopId] = useState(settings.selectedShopId);
+  const customerList = Array.isArray(customers) ? customers : [];
+  const productList = Array.isArray(products) ? products : [];
   const [billNumber, setBillNumber] = useState(() => `${settings.billPrefix}-${String(settings.nextBillNumber).padStart(4, "0")}`);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState(() => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
   const [type, setType] = useState<"Cash" | "Credit">("Cash");
   const [customerId, setCustomerId] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
+  const [orderNumberAuto, setOrderNumberAuto] = useState(true); // true = will auto-generate
   const [partyTin, setPartyTin] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [notes, setNotes] = useState("");
@@ -52,22 +58,20 @@ function CreateBill() {
   const [loading, setLoading] = useState(true);
 
   const selectedShop = shops.find(s => s.id === selectedShopId) || shops?.[0] || { id: "default", name: "", address: "", phone: "", tin: "" };
-
-  const customer = customers.find((c) => c.id === customerId);
+  const customer = customerList.find((c) => c.id === customerId);
 
   useEffect(() => {
     async function loadData() {
       try {
         const [p, c, s] = await Promise.all([
-          productsAPI.getAll(), 
-          customersAPI.getAll(),
+          productsAPI.getAll({ perPage: 1000 }),
+          customersAPI.getAll({ perPage: 1000 }),
           settingsAPI.getShops()
         ]);
-        setProducts(p);
-        setCustomers(c);
+        setProducts(p.data);
+        setCustomers(c.data);
         setShops(s);
-        // If no selected shop, set first one
-        if (!s.find(shop => shop.id === selectedShopId) && s.length > 0) {
+        if (!s.find((shop: Shop) => shop.id === selectedShopId) && s.length > 0) {
           setSelectedShopId(s[0].id);
         }
       } catch (error) {
@@ -80,7 +84,10 @@ function CreateBill() {
   }, []);
 
   useEffect(() => {
-    if (customer) setPartyTin(customer.tinNumber || "");
+    if (customer) {
+      setPartyTin(customer.tinNumber || "");
+      if (orderNumberAuto) setOrderNumber(""); // clear so backend auto-generates
+    }
   }, [customer]);
 
   const totals = useMemo(() => {
@@ -137,6 +144,7 @@ function CreateBill() {
     setLines([makeEmptyLine(settings.defaultGst)]);
     setCustomerId("");
     setOrderNumber("");
+    setOrderNumberAuto(true);
     setPartyTin("");
     setVehicleNumber("");
     setNotes("");
@@ -197,33 +205,26 @@ function CreateBill() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoading label="Loading bill form…" />;
 
   return (
     <>
       <PageHeader
         title="Create Bill"
         subtitle={`Bill ${billNumber} · ${type}`}
-        onOpenMenu={openMenu}
         actions={
           <>
-            <Btn onClick={handleClear} icon={RotateCcw} variant="ghost">Clear</Btn>
-            <Btn onClick={() => navigate({ to: "/dashboard" })} icon={X} variant="ghost">Cancel</Btn>
-            <Btn onClick={() => { const e = validate(); if (e) return toast.error(e); setPreviewOpen(true); }} icon={Eye} variant="outline">Preview</Btn>
-            <Btn onClick={() => handleSave(true)} icon={Printer} variant="outline">Save &amp; Print</Btn>
-            <Btn onClick={() => handleSave(false)} icon={Save} variant="primary">Save bill</Btn>
+            <Button variant="ghost" onClick={handleClear}><RotateCcw className="size-4" /> Clear</Button>
+            <Button variant="ghost" onClick={() => navigate({ to: "/dashboard" })}><X className="size-4" /> Cancel</Button>
+            <Button variant="outline" onClick={() => { const e = validate(); if (e) return toast.error(e); setPreviewOpen(true); }}><Eye className="size-4" /> Preview</Button>
+            <Button variant="outline" onClick={() => handleSave(true)}><Printer className="size-4" /> Save & Print</Button>
+            <Button onClick={() => handleSave(false)}><Save className="size-4" /> Save bill</Button>
           </>
         }
       />
 
       {/* HEADER CARD */}
-      <section className="rounded-2xl bg-card border border-border/60 p-5 card-hover">
+      <Card className="p-5 card-hover mb-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-3">
             <div>
@@ -237,7 +238,7 @@ function CreateBill() {
                 ))}
               </Select>
             </div>
-            <div className="font-display font-bold text-xl text-brand">{selectedShop.name}</div>
+            <div className="font-display font-bold text-xl text-primary">{selectedShop.name}</div>
             <div className="text-sm text-muted-foreground">{selectedShop.address}</div>
             <div className="text-sm">📞 {selectedShop.phone} · TIN {selectedShop.tin}</div>
           </div>
@@ -269,17 +270,43 @@ function CreateBill() {
           <Field label="Customer *">
             <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
               <option value="">Select customer…</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {customerList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>
           <Field label="Order No.">
-            <Input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
+            <div className="relative">
+              <Input
+                value={orderNumber}
+                onChange={(e) => { setOrderNumber(e.target.value); setOrderNumberAuto(e.target.value === ""); }}
+                placeholder={customer ? `Auto: ${new Date(date).getFullYear()}-C???-????` : "e.g. PO-2026-001"}
+              />
+              {orderNumber && (
+                <button
+                  type="button"
+                  onClick={() => { setOrderNumber(""); setOrderNumberAuto(true); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                  title="Clear to auto-generate"
+                >✕</button>
+              )}
+            </div>
+            {orderNumberAuto && customer && (
+              <p className="text-[11px] text-muted-foreground mt-1">Auto-generated on save</p>
+            )}
           </Field>
           <Field label="Party TIN">
             <Input value={partyTin} onChange={(e) => setPartyTin(e.target.value)} />
           </Field>
           <Field label="Vehicle No.">
-            <Input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="KA-42-AB-1234" />
+            <Input
+              value={vehicleNumber}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+                const p = [raw.slice(0,2), raw.slice(2,4), raw.slice(4,6), raw.slice(6,10)].filter(Boolean).join("-");
+                setVehicleNumber(p);
+              }}
+              placeholder="KA42AB1234"
+              maxLength={13}
+            />
           </Field>
         </div>
 
@@ -288,13 +315,13 @@ function CreateBill() {
             <span className="font-semibold text-foreground">{customer.name}</span> · {customer.address} · {customer.phone}
           </div>
         )}
-      </section>
+      </Card>
 
       {/* LINES */}
-      <section className="mt-4 rounded-2xl bg-card border border-border/60 overflow-hidden card-hover">
+      <Card className="overflow-hidden card-hover mb-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-xs uppercase tracking-wider text-muted-foreground sticky top-0">
+            <thead className="text-xs uppercase tracking-wider text-muted-foreground sticky top-0" style={{ background: "linear-gradient(135deg, #122658 0%, #132D6A 50%, #1B3F8A 100%)", color: "#E4C457" }}>
               <tr>
                 <th className="px-3 py-3 text-left w-10">#</th>
                 <th className="px-3 py-3 text-left min-w-[220px]">Product</th>
@@ -308,30 +335,28 @@ function CreateBill() {
               </tr>
             </thead>
             <tbody>
-              {lines.map((l, i) => <LineRow key={l.id} i={i} l={l} products={products} onChange={updateLine} onPickProduct={pickProduct} onRemove={removeLine} onAddNext={addLine} />)}
+              {lines.map((l, i) => <LineRow key={l.id} i={i} l={l} productList={productList} onChange={updateLine} onPickProduct={pickProduct} onRemove={removeLine} onAddNext={addLine} />)}
             </tbody>
           </table>
         </div>
         <div className="p-3 border-t border-border/60">
-          <button
-            onClick={addLine}
-            className="inline-flex items-center gap-2 rounded-xl border border-dashed border-primary/40 text-primary px-3.5 py-2 text-sm font-semibold hover:bg-primary/5 transition"
-          >
-            <Plus className="size-4" /> Add row <span className="text-[11px] text-muted-foreground ml-2">(Enter to add)</span>
-          </button>
+          <Button variant="outline" onClick={addLine} className="border-dashed border-primary/40 text-primary hover:bg-primary/5">
+            <Plus className="size-4" /> Add row
+            <span className="text-[11px] text-muted-foreground ml-1">(Enter to add)</span>
+          </Button>
         </div>
-      </section>
+      </Card>
 
       {/* TOTALS + NOTES */}
-      <section className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 rounded-2xl bg-card border border-border/60 p-5 space-y-3 card-hover">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-5 space-y-3 card-hover">
           <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes (won't print)" /></Field>
           <Field label="Terms & conditions"><Textarea value={terms} onChange={(e) => setTerms(e.target.value)} /></Field>
           <div className="text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Amount in words:</span> {numberToIndianWords(totals.grand)}
           </div>
-        </div>
-        <div className="rounded-2xl bg-card border border-border/60 p-5 card-hover">
+        </Card>
+        <Card className="p-5 card-hover">
           <h3 className="font-display font-bold text-lg">Summary</h3>
           <div className="mt-3 space-y-2 text-sm">
             <Row k="Sub total" v={formatINR(totals.sub)} />
@@ -341,13 +366,13 @@ function CreateBill() {
             <div className="my-2 h-px bg-border" />
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">Grand total</span>
-              <span className="font-display text-2xl font-bold text-brand">{formatINR(totals.grand)}</span>
+              <span className="font-display text-2xl font-bold text-primary">{formatINR(totals.grand)}</span>
             </div>
             <div className="mt-2 rounded-xl bg-muted/60 p-3 text-[11px] text-muted-foreground italic">
               {numberToIndianWords(totals.grand)}
             </div>
           </div>
-        </div>
+        </Card>
       </section>
 
       {/* Hidden print area for "Save & Print" */}
@@ -358,21 +383,22 @@ function CreateBill() {
         />
       </div>
 
-      {/* PREVIEW MODAL */}
       {previewOpen && (
-        <PreviewModal onClose={() => setPreviewOpen(false)}>
-          <BillPrint bill={{ ...buildBill(), id: "", createdAt: "" }} shop={selectedShop} />
-        </PreviewModal>
+        <BillPreview
+          bill={{ ...buildBill(), id: "", createdAt: "" } as any}
+          shop={selectedShop as any}
+          onClose={() => setPreviewOpen(false)}
+        />
       )}
     </>
   );
 }
 
 function LineRow({
-  i, l, products, onChange, onPickProduct, onRemove, onAddNext,
+  i, l, productList, onChange, onPickProduct, onRemove, onAddNext,
 }: {
   i: number; l: BillLine;
-  products: ReturnType<typeof useProducts>[0];
+  productList: ReturnType<typeof useProducts>[0];
   onChange: (i: number, p: Partial<BillLine>) => void;
   onPickProduct: (i: number, pid: string) => void;
   onRemove: (i: number) => void;
@@ -383,7 +409,7 @@ function LineRow({
   const onKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); onAddNext(); } };
 
   return (
-    <tr className="border-t border-border/60 hover:bg-accent/30 transition-colors animate-in fade-in">
+    <tr className="border-t border-border/60 table-row-hover transition-colors animate-in fade-in">
       <td className="px-3 py-2 text-muted-foreground tabular-nums">{i + 1}</td>
       <td className="px-3 py-2">
         <select
@@ -392,7 +418,7 @@ function LineRow({
           onChange={(e) => onPickProduct(i, e.target.value)}
         >
           <option value="">— Select product —</option>
-          {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+          {productList.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
         </select>
         {!l.productId && l.description === "" && <div className="text-[11px] text-muted-foreground mt-1">or type a custom description below</div>}
         {(l.productId || l.description) && (
@@ -466,38 +492,4 @@ function NumberInput({
 function Row({ k, v }: { k: string; v: string }) {
   return <div className="flex items-center justify-between"><span className="text-muted-foreground">{k}</span><span className="font-medium tabular-nums">{v}</span></div>;
 }
-function Btn({
-  children, icon: Icon, variant = "primary", onClick,
-}: { children: React.ReactNode; icon: typeof Save; variant?: "primary" | "outline" | "ghost"; onClick?: () => void }) {
-  const cls = variant === "primary"
-    ? "gradient-primary text-primary-foreground shadow-glow liquid-btn"
-    : variant === "outline"
-      ? "border border-input bg-card hover:bg-accent hover-lift"
-      : "hover:bg-accent hover-lift";
-  return (
-    <button onClick={onClick} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-all hover:translate-y-[-1px] ${cls}`}>
-      <Icon className="size-4" /> {children}
-    </button>
-  );
-}
 
-function PreviewModal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 backdrop-blur-sm animate-in fade-in no-print" onClick={onClose}>
-      <div className="relative max-h-[92vh] overflow-auto p-4" onClick={(e) => e.stopPropagation()}>
-        <div className="absolute top-2 right-2 z-10 flex gap-2 no-print">
-          <button onClick={() => window.print()} className="rounded-xl gradient-primary text-primary-foreground px-3 py-2 text-sm font-semibold shadow-glow inline-flex items-center gap-2">
-            <Printer className="size-4" /> Print
-          </button>
-          <button onClick={onClose} className="rounded-xl bg-card border border-border px-3 py-2 text-sm">
-            <X className="size-4" />
-          </button>
-        </div>
-        <div className="animate-in zoom-in-95 duration-200">{children}</div>
-        <div className="mt-3 text-center text-xs text-muted-foreground inline-flex items-center gap-2 justify-center w-full">
-          <FileText className="size-3.5" /> A5 print layout matches the SLN receipt
-        </div>
-      </div>
-    </div>
-  );
-}

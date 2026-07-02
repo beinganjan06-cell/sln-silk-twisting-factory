@@ -3,9 +3,12 @@ import { useState } from "react";
 import { Download, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { openMenu } from "./_app";
 import { applyTheme, useSettings, saveSettings } from "@/lib/store";
 import { settingsAPI } from "@/lib/settings";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
@@ -28,6 +31,7 @@ function SettingsPage() {
       const result = await settingsAPI.update(s);
       if (result.success) {
         saveSettings(result.settings);
+        applyTheme(s.theme);
         toast.success("Settings saved");
       }
     } catch (error) {
@@ -49,6 +53,7 @@ function SettingsPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
   function restore(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -68,81 +73,95 @@ function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        onOpenMenu={openMenu}
+        subtitle="Company, billing & appearance preferences"
         actions={
-          <button onClick={save} disabled={busy} className="inline-flex items-center gap-2 rounded-xl gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow disabled:opacity-70">
+          <Button onClick={save} loading={busy}>
             <Save className="size-4" /> Save changes
-          </button>
+          </Button>
         }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Company information">
+        <SettingsCard title="Company information">
           <Grid>
-            <L label="Company name" full><I value={s.companyName} onChange={(e) => setS({ ...s, companyName: e.target.value })} /></L>
-            <L label="Owner / Proprietor"><I value={s.ownerName} onChange={(e) => setS({ ...s, ownerName: e.target.value })} /></L>
-            <L label="Phone"><I value={s.phone} onChange={(e) => setS({ ...s, phone: e.target.value })} /></L>
-            <L label="Email"><I value={s.email} onChange={(e) => setS({ ...s, email: e.target.value })} /></L>
-            <L label="GST"><I value={s.gst} onChange={(e) => setS({ ...s, gst: e.target.value })} /></L>
-            <L label="TIN"><I value={s.tin} onChange={(e) => setS({ ...s, tin: e.target.value })} /></L>
-            <L label="Address" full><I value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} /></L>
+            <Field label="Company name" full><Input value={s.companyName} onChange={(e) => setS({ ...s, companyName: e.target.value })} /></Field>
+            <Field label="Owner / Proprietor"><Input value={s.ownerName} onChange={(e) => setS({ ...s, ownerName: e.target.value })} /></Field>
+            <Field label="Phone"><Input value={s.phone} onChange={(e) => setS({ ...s, phone: e.target.value })} /></Field>
+            <Field label="Email"><Input value={s.email} onChange={(e) => setS({ ...s, email: e.target.value })} /></Field>
+            <Field label="GST"><Input value={s.gst} onChange={(e) => setS({ ...s, gst: e.target.value })} /></Field>
+            <Field label="TIN"><Input value={s.tin} onChange={(e) => setS({ ...s, tin: e.target.value })} /></Field>
+            <Field label="Address" full><Input value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} /></Field>
           </Grid>
-        </Card>
+        </SettingsCard>
 
-        <Card title="Billing">
+        <SettingsCard title="Billing">
           <Grid>
-            <L label="Bill prefix"><I value={s.billPrefix} onChange={(e) => setS({ ...s, billPrefix: e.target.value })} /></L>
-            <L label="Next bill number"><I type="number" value={s.nextBillNumber} onChange={(e) => setS({ ...s, nextBillNumber: parseInt(e.target.value || "1")})} /></L>
-            <L label="Default GST %"><I type="number" step="0.5" value={s.defaultGst} onChange={(e) => setS({ ...s, defaultGst: parseFloat(e.target.value || "0")})} /></L>
-            <L label="Currency"><I value={s.currency} onChange={(e) => setS({ ...s, currency: e.target.value })} /></L>
+            <Field label="Bill prefix"><Input value={s.billPrefix} onChange={(e) => setS({ ...s, billPrefix: e.target.value })} /></Field>
+            <Field label="Next bill number"><Input type="number" value={s.nextBillNumber} onChange={(e) => setS({ ...s, nextBillNumber: parseInt(e.target.value || "1") })} /></Field>
+            <Field label="Default GST %"><Input type="number" step="0.5" value={s.defaultGst} onChange={(e) => setS({ ...s, defaultGst: parseFloat(e.target.value || "0") })} /></Field>
+            <Field label="Currency"><Input value={s.currency} onChange={(e) => setS({ ...s, currency: e.target.value })} /></Field>
           </Grid>
-        </Card>
+        </SettingsCard>
 
-        <Card title="Appearance">
-          <div className="flex items-center gap-3">
-            <span className="text-sm">Theme</span>
+        <SettingsCard title="Appearance">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">Theme</span>
             <div className="flex rounded-xl bg-muted p-1">
               {(["light", "dark"] as const).map((t) => (
-                <button key={t} onClick={() => setS({ ...s, theme: t })} className={"px-4 py-1.5 text-xs font-semibold rounded-lg capitalize " + (s.theme === t ? "bg-card shadow-sm" : "text-muted-foreground")}>{t}</button>
+                <button
+                  key={t}
+                  onClick={() => setS({ ...s, theme: t })}
+                  className={cn(
+                    "px-5 py-2 text-xs font-semibold rounded-lg capitalize transition-all",
+                    s.theme === t ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t}
+                </button>
               ))}
             </div>
           </div>
-        </Card>
+        </SettingsCard>
 
-        <Card title="Backup &amp; restore">
-          <p className="text-sm text-muted-foreground mb-3">Export all bills, products and customers as a JSON backup. You can restore it on this or another device.</p>
+        <SettingsCard title="Backup & restore">
+          <CardDescription className="mb-4">
+            Export all bills, products and customers as a JSON backup. Restore on this or another device.
+          </CardDescription>
           <div className="flex flex-wrap gap-2">
-            <button onClick={backup} className="inline-flex items-center gap-2 rounded-xl border border-input bg-card px-4 py-2 text-sm font-semibold hover:bg-accent">
+            <Button variant="outline" onClick={backup}>
               <Download className="size-4" /> Download backup
-            </button>
-            <label className="inline-flex items-center gap-2 rounded-xl border border-input bg-card px-4 py-2 text-sm font-semibold hover:bg-accent cursor-pointer">
+            </Button>
+            <label className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer inline-flex")}>
               <Upload className="size-4" /> Restore from file
               <input type="file" accept="application/json" className="hidden" onChange={restore} />
             </label>
           </div>
-        </Card>
+        </SettingsCard>
       </div>
     </>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function SettingsCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-card border border-border/60 p-5">
-      <h2 className="font-display font-bold text-lg mb-4">{title}</h2>
-      {children}
-    </div>
+    <Card className="card-hover">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   );
 }
-function Grid({ children }: { children: React.ReactNode }) { return <div className="grid grid-cols-2 gap-3">{children}</div>; }
-function L({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+
+function Grid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-3">{children}</div>;
+}
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
-    <label className={"block " + (full ? "col-span-2" : "")}>
-      <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">{label}</span>
+    <label className={cn("block", full && "col-span-2")}>
+      <span className="block text-xs font-semibold text-muted-foreground mb-2">{label}</span>
       {children}
     </label>
   );
-}
-function I(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className="w-full rounded-xl border border-input bg-card/60 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />;
 }

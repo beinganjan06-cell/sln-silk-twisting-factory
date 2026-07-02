@@ -151,16 +151,28 @@ const DEFAULT_CATEGORIES = ["Silk Yarn", "Twisted Silk", "Raw Material", "Finish
 
 // ----- Hooks -----
 
+function normalizeStoredValue<T>(value: T, fallback: T): T {
+  if (Array.isArray(fallback)) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object" && Array.isArray((value as any).data)) {
+      return (value as any).data as T;
+    }
+    return fallback;
+  }
+  return value;
+}
+
 function useStored<T>(key: string, fallback: T): [T, (next: T | ((p: T) => T)) => void] {
-  const [val, setVal] = useState<T>(() => read(key, fallback));
+  const [val, setVal] = useState<T>(() => normalizeStoredValue(read(key, fallback), fallback));
   useEffect(() => {
-    const l = () => setVal(read(key, fallback));
+    const l = () => setVal(normalizeStoredValue(read(key, fallback), fallback));
     listeners.add(l);
     return () => { listeners.delete(l); };
   }, [key, fallback]); 
   
   const setter = useCallback((next: T | ((p: T) => T)) => {
-    const value = typeof next === "function" ? (next as (p: T) => T)(read(key, fallback)) : next;
+    const current = normalizeStoredValue(read(key, fallback), fallback);
+    const value = typeof next === "function" ? (next as (p: T) => T)(current) : next;
     write(key, value);
   }, [key, fallback]);
   

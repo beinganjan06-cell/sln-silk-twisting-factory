@@ -12,8 +12,23 @@ export interface DashboardStats {
   topProducts: { name: string; qty: number; amount: number }[];
 }
 
+export interface DashboardFilterResult {
+  filter: string;
+  label: string;
+  from?: string;
+  to?: string;
+  bills?: any[];
+  customers?: any[];
+  total: number;
+  count: number;
+}
+
 export const dashboardAPI = {
   getStats: async (): Promise<DashboardStats> => {
     return get<DashboardStats>("/dashboard");
+  },
+
+  getFiltered: async (type: "today" | "month" | "outstanding"): Promise<DashboardFilterResult> => {
+    return get<DashboardFilterResult>(`/dashboard/filter?type=${type}`);
   },
 };

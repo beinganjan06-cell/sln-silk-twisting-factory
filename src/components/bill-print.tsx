@@ -1,32 +1,45 @@
-import type { Bill, Settings, Shop } from "@/lib/store";
+import type { Bill, Shop } from "@/lib/store";
+import type { BillDetail, BillDetailLine } from "@/lib/bills";
 import { SlnLogo } from "./sln-logo";
 import { formatNumber, numberToIndianWords } from "@/lib/format";
 
-interface Props { bill: Bill; shop: Shop }
+// From history page: pass BillDetail (has embedded shop, no separate shop prop needed)
+// From create page:  pass Bill + shop prop
+type Props =
+  | { bill: BillDetail; shop?: never }
+  | { bill: Bill; shop: Shop };
 
-export function BillPrint({ bill, shop }: Props) {
-  // Pad lines for a printed-receipt feel
-  const padded = [...bill.lines];
-  while (padded.length < 10) padded.push({ id: "x" + padded.length } as never);
-  
-  // Get short name for footer
-  const shortShopName = shop.name.includes("Vinayaka") ? "Vinayaka Silk Twisting Factory" : "SLN Silk Twisting Factory";
+export function BillPrint({ bill, shop: shopProp }: Props) {
+  // Resolve shop — BillDetail has .shop embedded, create page passes shop prop
+  const shop: Shop | BillDetail["shop"] =
+    shopProp ?? ("shop" in bill ? bill.shop : { id: "default", name: "", address: "", phone: "", tin: "" });
+
+  // Resolve lines — BillDetail uses BillDetailLine, Bill uses BillLine (same shape after snakeToCamel)
+  const lines = bill.lines as BillDetailLine[];
+
+  // Pad to 10 rows for print layout
+  const padded: (BillDetailLine | null)[] = [...lines];
+  while (padded.length < 10) padded.push(null);
+
+  const shortShopName = shop.name.includes("Vinayaka")
+    ? "Vinayaka Silk Twisting Factory"
+    : "SLN Silk Twisting Factory";
 
   return (
     <div
       className="print-area mx-auto bg-white text-[#1f2b8a] border border-[#1f2b8a]/60 rounded-md"
-      style={{ width: "148mm", minHeight: "210mm", padding: "6mm 7mm", fontFamily: "Inter, sans-serif" }}
+      style={{ width: "148mm", height: "210mm", padding: "4mm 6mm", fontFamily: "Inter, sans-serif", overflow: "hidden" }}
     >
       {/* Top strip */}
       <div className="flex items-center justify-between text-[10px] font-semibold">
         <div>TIN : {shop.tin}</div>
-        <div className="px-3 py-0.5 border-y-2 border-[#1f2b8a]">CASH /CREDIT BILL</div>
+        <div className="px-3 py-0.5 border-y-2 border-[#1f2b8a]">CASH / CREDIT BILL</div>
         <div>Mobile : {shop.phone}</div>
       </div>
 
       {/* Company header */}
       <div className="mt-1 flex items-center justify-center gap-3">
-        <SlnLogo size={42} variant={shop.logoVariant} />
+        <SlnLogo size={42} variant={"logoVariant" in shop ? (shop.logoVariant as any) : undefined} />
         <div className="text-center">
           <div className="font-display font-bold text-[#c1121f] leading-tight" style={{ fontSize: 22 }}>
             {shop.name}
@@ -37,18 +50,21 @@ export function BillPrint({ bill, shop }: Props) {
         </div>
       </div>
 
-      {/* To / No / Date / Time */}
+      {/* To / Bill No / Date / Time */}
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 text-[11px]">
         <div className="border border-[#1f2b8a]/70 rounded p-2 min-h-[78px]">
           <div className="font-semibold mb-1">To,</div>
-          <div className="leading-relaxed">{bill.customerSnapshot.name}</div>
+          <div className="leading-relaxed font-medium">{bill.customerSnapshot.name}</div>
           <div className="leading-relaxed text-[10px]">{bill.customerSnapshot.address}</div>
-          <div className="mt-2">Your Order No. <span className="font-medium">{bill.orderNumber || "—"}</span></div>
+          <div className="mt-2">
+            Your Order No.{" "}
+            <span className="font-medium">{bill.orderNumber || "—"}</span>
+          </div>
         </div>
         <div className="w-[55mm] border border-[#1f2b8a]/70 rounded p-2 space-y-1">
           <Row k="No." v={bill.number} accent />
           <Row k="Date :" v={new Date(bill.date).toLocaleDateString("en-IN")} />
-          <Row k="Time :" v={bill.time} />
+          <Row k="Time :" v={bill.time || "—"} />
           <Row k="Party TIN :" v={bill.partyTin || bill.customerSnapshot.tin || "—"} />
         </div>
       </div>
@@ -57,49 +73,58 @@ export function BillPrint({ bill, shop }: Props) {
       <table className="mt-2 w-full text-[11px] border-collapse">
         <thead className="bg-[#eef0ff]">
           <tr className="text-[#1f2b8a]">
-            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[10mm]">Sl.<br/>No.</th>
+            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[10mm]">Sl.<br />No.</th>
             <th className="border border-[#1f2b8a]/70 px-1 py-1 text-left">DESCRIPTION</th>
             <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[22mm]">QUANTITY</th>
-            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[22mm]">RATE<br/><span className="text-[9px]">Rs.   P.</span></th>
-            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[26mm]">AMOUNT<br/><span className="text-[9px]">Rs.   P.</span></th>
+            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[22mm]">RATE<br /><span className="text-[9px]">Rs.   P.</span></th>
+            <th className="border border-[#1f2b8a]/70 px-1 py-1 w-[26mm]">AMOUNT<br /><span className="text-[9px]">Rs.   P.</span></th>
           </tr>
         </thead>
         <tbody>
           {padded.map((l, i) => {
-            const real = bill.lines[i];
-            const amount = real ? real.quantity * real.rate * (1 - real.discountPct / 100) * (1 + real.gstPct / 100) : 0;
+            const amount = l
+              ? l.quantity * l.rate * (1 - l.discountPct / 100) * (1 + l.gstPct / 100)
+              : 0;
             return (
-              <tr key={l.id || i} className="align-top">
-                <td className="border border-[#1f2b8a]/40 px-1 py-1 text-center h-[8mm]">{real ? i + 1 : ""}</td>
-                <td className="border border-[#1f2b8a]/40 px-2 py-1">{real?.description ?? ""}</td>
-                <td className="border border-[#1f2b8a]/40 px-2 py-1 text-right">{real ? `${formatNumber(real.quantity)} ${real.unit}` : ""}</td>
-                <td className="border border-[#1f2b8a]/40 px-2 py-1 text-right tabular-nums">{real ? formatNumber(real.rate) : ""}</td>
-                <td className="border border-[#1f2b8a]/40 px-2 py-1 text-right tabular-nums">{real ? formatNumber(amount) : ""}</td>
+              <tr key={l?.id ?? `empty-${i}`} className="align-top">
+                <td className="border border-[#1f2b8a]/40 px-1 py-0.5 text-center h-[7mm]">{l ? i + 1 : ""}</td>
+                <td className="border border-[#1f2b8a]/40 px-2 py-0.5">{l?.description ?? ""}</td>
+                <td className="border border-[#1f2b8a]/40 px-2 py-0.5 text-right">
+                  {l ? `${formatNumber(l.quantity)} ${l.unit}` : ""}
+                </td>
+                <td className="border border-[#1f2b8a]/40 px-2 py-0.5 text-right tabular-nums">
+                  {l ? formatNumber(l.rate) : ""}
+                </td>
+                <td className="border border-[#1f2b8a]/40 px-2 py-0.5 text-right tabular-nums">
+                  {l ? formatNumber(amount) : ""}
+                </td>
               </tr>
             );
           })}
           <tr>
             <td colSpan={3} />
-            <td className="border border-[#1f2b8a]/70 px-2 py-1 text-right font-bold bg-[#eef0ff]">TOTAL</td>
-            <td className="border border-[#1f2b8a]/70 px-2 py-1 text-right font-bold tabular-nums bg-[#eef0ff]">
+            <td className="border border-[#1f2b8a]/70 px-2 py-0.5 text-right font-bold bg-[#eef0ff]">TOTAL</td>
+            <td className="border border-[#1f2b8a]/70 px-2 py-0.5 text-right font-bold tabular-nums bg-[#eef0ff]">
               {formatNumber(bill.grandTotal)}
             </td>
           </tr>
           <tr>
-            <td colSpan={3} className="px-2 py-1 text-[10px]">
+            <td colSpan={3} className="px-2 py-0.5 text-[10px]">
               <span className="font-semibold">In Words Rs.</span> {numberToIndianWords(bill.grandTotal)}
             </td>
-            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-2 text-right font-semibold text-[#c1121f]">
+            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-1 text-right font-semibold text-[#c1121f]">
               For {shortShopName}
             </td>
           </tr>
           <tr>
-            <td colSpan={3} className="px-2 py-3 text-[10px]">
+            <td colSpan={3} className="px-2 py-1 text-[10px]">
               <div>Vehicle No. <span className="font-medium">{bill.vehicleNumber || "—"}</span></div>
-              <div className="mt-6 border-t border-dashed border-[#1f2b8a]/70 pt-1">Sign. of the Buyer / Agent / Authorised Person</div>
+              <div className="mt-4 border-t border-dashed border-[#1f2b8a]/70 pt-1">
+                Sign. of the Buyer / Agent / Authorised Person
+              </div>
             </td>
-            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-2 text-right align-bottom">
-              <div className="mt-10">Proprietor</div>
+            <td colSpan={2} className="border border-[#1f2b8a]/70 px-2 py-1 text-right align-bottom">
+              <div className="mt-8">Proprietor</div>
             </td>
           </tr>
         </tbody>

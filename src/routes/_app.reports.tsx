@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "@/components/page-header";
-import { openMenu } from "./_app";
+import { EmptyState } from "@/components/empty-state";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useBills, useCustomers } from "@/lib/store";
 import { formatINR } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/reports")({
   head: () => ({
@@ -21,6 +23,7 @@ const TABS = ["Daily", "Monthly", "Yearly", "By customer", "By product", "Outsta
 function Reports() {
   const [bills] = useBills();
   const [customers] = useCustomers();
+  const customersList = Array.isArray(customers) ? customers : [];
   const [tab, setTab] = useState<typeof TABS[number]>("Daily");
 
   const data = useMemo(() => {
@@ -65,46 +68,70 @@ function Reports() {
       }
       return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }));
     }
-    // Outstanding
-    return customers.filter((c) => c.balance > 0).map((c) => ({ name: c.name, value: c.balance }));
-  }, [bills, customers, tab]);
+    return customersList.filter((c) => c.balance > 0).map((c) => ({ name: c.name, value: c.balance }));
+  }, [bills, customersList, tab]);
 
   const total = data.reduce((a, b) => a + b.value, 0);
 
   return (
     <>
-      <PageHeader title="Reports" subtitle="Sales insights" onOpenMenu={openMenu} />
+      <PageHeader title="Reports" subtitle="Sales insights & analytics" />
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-6">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={"rounded-xl px-3.5 py-2 text-sm font-semibold transition " + (tab === t ? "gradient-primary text-primary-foreground shadow-glow" : "bg-card border border-border hover:bg-accent")}
-          >{t}</button>
+            className={cn(
+              "rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200",
+              tab === t
+                ? "gradient-primary text-white shadow-glow"
+                : "bg-card border border-border hover:bg-accent hover:border-primary/20",
+            )}
+          >
+            {t}
+          </button>
         ))}
       </div>
 
-      <div className="rounded-2xl bg-card border border-border/60 p-5">
-        <div className="flex items-end justify-between mb-3">
-          <div>
-            <h2 className="font-display font-bold text-lg">{tab}</h2>
-            <p className="text-xs text-muted-foreground">Total: <span className="font-semibold text-foreground">{formatINR(total)}</span></p>
+      <Card className="card-hover">
+        <CardHeader>
+          <div className="flex items-end justify-between">
+            <div>
+              <CardTitle>{tab}</CardTitle>
+              <CardDescription>
+                Total: <span className="font-semibold text-foreground">{formatINR(total)}</span>
+              </CardDescription>
+            </div>
           </div>
-        </div>
-        <div className="h-72">
-          <ResponsiveContainer>
-            <BarChart data={data} margin={{ left: -10, right: 8, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 250)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => formatINR(v)} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)" }} />
-              <Bar dataKey="value" fill="oklch(0.55 0.2 265)" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        {data.length === 0 && <div className="text-center text-sm text-muted-foreground py-10">No data yet for this report.</div>}
-      </div>
+        </CardHeader>
+        <CardContent>
+          {data.length === 0 ? (
+            <EmptyState title="No data yet" description="No data available for this report period." />
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer>
+                <BarChart data={data} margin={{ left: -10, right: 8, top: 8 }}>
+                  <defs>
+                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2563EB" />
+                      <stop offset="100%" stopColor="#7C3AED" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(v: number) => formatINR(v)}
+                    contentStyle={{ borderRadius: 12, border: "1px solid #E2E8F0", boxShadow: "0 4px 14px rgba(15,23,42,0.1)" }}
+                  />
+                  <Bar dataKey="value" fill="url(#barGrad)" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

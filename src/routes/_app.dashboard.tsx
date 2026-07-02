@@ -1,13 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Receipt, TrendingUp, Calendar, Users, Package, AlertCircle,
-  Plus, FilePlus2, History, BarChart3,
+  Receipt, TrendingUp, Calendar, Users, Package,
+  FilePlus2, ArrowUpRight, Activity,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+} from "recharts";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
-import { openMenu } from "./_app";
+import { PageSkeleton } from "@/components/page-loading";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { dashboardAPI } from "@/lib/dashboard";
 import { formatINR } from "@/lib/format";
 
@@ -28,8 +33,7 @@ function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await dashboardAPI.getStats();
-        setStats(data);
+        setStats(await dashboardAPI.getStats());
       } catch (error) {
         console.error("Failed to load dashboard stats:", error);
       } finally {
@@ -39,136 +43,193 @@ function Dashboard() {
     load();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton />;
 
   return (
     <>
       <PageHeader
         title="Dashboard"
         subtitle="Live overview of today's billing activity"
-        onOpenMenu={openMenu}
         actions={
-          <Link to="/billing/create" className="inline-flex items-center gap-2 rounded-xl gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow hover:translate-y-[-1px] transition-transform">
-            <FilePlus2 className="size-4" /> Create bill
-          </Link>
+          <Button asChild>
+            <Link to="/billing/create">
+              <FilePlus2 className="size-4" /> Create bill
+            </Link>
+          </Button>
         }
       />
 
-      <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard label="Today's Bills" value={stats?.todaysBills || 0} icon={Receipt} accent="primary" />
-        <StatCard label="Today's Sales" value={stats?.todaysSales || 0} icon={TrendingUp} accent="success" prefix="₹" decimals={0} />
-        <StatCard label="Monthly Sales" value={stats?.monthlySales || 0} icon={Calendar} accent="primary" prefix="₹" decimals={0} />
-        <StatCard label="Products" value={stats?.productsCount || 0} icon={Package} accent="brand" />
-        <StatCard label="Customers" value={stats?.customersCount || 0} icon={Users} accent="primary" />
-        <StatCard label="Outstanding" value={stats?.outstanding || 0} icon={AlertCircle} accent="warning" prefix="₹" decimals={0} />
+      <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <StatCard label="Today's Bills" value={stats?.todaysBills || 0} icon={Receipt} accent="primary" delay={0} href="/billing/history?filter=today" />
+        <StatCard label="Today's Sales" value={stats?.todaysSales || 0} icon={TrendingUp} accent="success" prefix="₹" decimals={0} delay={50} href="/billing/history?filter=today" />
+        <StatCard label="Monthly Sales" value={stats?.monthlySales || 0} icon={Calendar} accent="secondary" prefix="₹" decimals={0} delay={100} href="/billing/history?filter=month" />
+        <StatCard label="Products" value={stats?.productsCount || 0} icon={Package} accent="info" delay={150} href="/products" />
+        <StatCard label="Customers" value={stats?.customersCount || 0} icon={Users} accent="primary" delay={200} href="/customers" />
+
       </section>
 
       <section className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 rounded-2xl bg-card border border-border/60 p-5">
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <h2 className="font-display font-bold text-lg">Sales — last 14 days</h2>
-              <p className="text-xs text-muted-foreground">Daily grand total including GST</p>
+        <Card className="xl:col-span-2 card-hover">
+          <CardHeader className="pb-2">
+            <div className="flex items-end justify-between">
+              <div>
+                <CardTitle>Sales — last 14 days</CardTitle>
+                <CardDescription>Daily grand total including GST</CardDescription>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-success">
+                <Activity className="size-3.5" />
+                Live
+              </div>
             </div>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <AreaChart data={stats?.chartData || []} margin={{ left: -10, right: 8, top: 8 }}>
-                <defs>
-                  <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="oklch(0.52 0.24 18)" stopOpacity={0.6} />
-                    <stop offset="50%" stopColor="oklch(0.32 0.2 255)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="oklch(0.32 0.2 255)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0.01 250)" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => formatINR(v)} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)" }} />
-                <Area type="monotone" dataKey="sales" stroke="oklch(0.52 0.24 18)" fill="url(#g)" strokeWidth={2.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 animate-in fade-in duration-700">
+              <ResponsiveContainer>
+                <AreaChart data={stats?.chartData || []} margin={{ left: -10, right: 8, top: 8 }}>
+                  <defs>
+                    <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2563EB" stopOpacity={0.4} />
+                      <stop offset="50%" stopColor="#7C3AED" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="#7C3AED" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(v: number) => formatINR(v)}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #E2E8F0",
+                      boxShadow: "0 4px 14px rgba(15,23,42,0.1)",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#2563EB"
+                    fill="url(#salesGrad)"
+                    strokeWidth={2.5}
+                    animationDuration={1200}
+                    animationEasing="ease-out"
+                    animationBegin={100}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="rounded-2xl bg-card border border-border/60 p-5">
-          <h2 className="font-display font-bold text-lg">Quick actions</h2>
-          <p className="text-xs text-muted-foreground mb-4">Jump straight in</p>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickAction to="/billing/create" icon={FilePlus2} label="Create bill" tone="primary" />
-            <QuickAction to="/products" icon={Plus} label="Add product" tone="brand" />
-            <QuickAction to="/billing/history" icon={History} label="View bills" tone="primary" />
-            <QuickAction to="/reports" icon={BarChart3} label="Reports" tone="brand" />
-          </div>
-        </div>
+        <Card className="card-hover">
+          <CardHeader className="pb-2">
+            <CardTitle>Sales by category</CardTitle>
+            <CardDescription>Revenue split for top product categories</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 animate-in fade-in duration-700 delay-100">
+              <ResponsiveContainer>
+                <BarChart data={(stats?.topProducts || []).slice(0, 6)} margin={{ left: -10, right: 8, top: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(v: number) => formatINR(v)}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #E2E8F0",
+                      boxShadow: "0 4px 14px rgba(15,23,42,0.1)",
+                    }}
+                  />
+                  <Bar dataKey="amount" fill="#7C3AED" radius={[6, 6, 0, 0]} animationDuration={1200} animationEasing="ease-out" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 rounded-2xl bg-card border border-border/60 overflow-hidden">
-          <div className="p-5 pb-3 flex items-end justify-between">
-            <h2 className="font-display font-bold text-lg">Recent bills</h2>
-            <Link to="/billing/history" className="text-xs font-semibold text-primary hover:underline">See all</Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="text-left px-5 py-2.5 font-semibold">Bill</th>
-                  <th className="text-left px-5 py-2.5 font-semibold">Customer</th>
-                  <th className="text-left px-5 py-2.5 font-semibold">Date</th>
-                  <th className="text-right px-5 py-2.5 font-semibold">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats?.recentBills?.slice(0, 6).map((b: any) => (
-                  <tr key={b.id} className="border-t border-border/60 hover:bg-accent/40 transition-colors">
-                    <td className="px-5 py-3 font-semibold">{b.number}</td>
-                    <td className="px-5 py-3 truncate max-w-[220px]">{b.customerSnapshot?.name || "—"}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{new Date(b.date).toLocaleDateString("en-IN")}</td>
-                    <td className="px-5 py-3 text-right font-semibold tabular-nums">{formatINR(b.grandTotal)}</td>
+        <Card className="xl:col-span-2 overflow-hidden card-hover">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle>Recent bills</CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/billing/history">
+                  See all <ArrowUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wider text-muted-foreground sticky top-0" style={{ background: "linear-gradient(135deg, #122658 0%, #132D6A 50%, #1B3F8A 100%)", color: "#E4C457" }}>
+                  <tr>
+                    <th className="text-left px-6 py-3 font-semibold">Bill</th>
+                    <th className="text-left px-6 py-3 font-semibold">Customer</th>
+                    <th className="text-left px-6 py-3 font-semibold">Date</th>
+                    <th className="text-right px-6 py-3 font-semibold">Amount</th>
                   </tr>
-                ))}
-                {(!stats?.recentBills || stats?.recentBills.length === 0) && (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-muted-foreground">No bills yet — create your first bill.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                </thead>
+                <tbody>
+                  {stats?.recentBills?.slice(0, 6).map((b: any) => (
+                    <tr key={b.id} className="border-t border-border/60 table-row-hover">
+                      <td className="px-6 py-3.5 font-semibold">{b.number}</td>
+                      <td className="px-6 py-3.5 truncate max-w-[220px] text-muted-foreground">
+                        {b.customerSnapshot?.name || "—"}
+                      </td>
+                      <td className="px-6 py-3.5 text-muted-foreground">
+                        {new Date(b.date).toLocaleDateString("en-IN")}
+                      </td>
+                      <td className="px-6 py-3.5 text-right font-semibold tabular-nums">
+                        {formatINR(b.grandTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                  {(!stats?.recentBills || stats.recentBills.length === 0) && (
+                    <tr>
+                      <td colSpan={4}>
+                        <EmptyState
+                          title="No bills yet"
+                          description="Create your first bill to see it here."
+                          action={{ label: "Create bill", onClick: () => window.location.assign("/billing/create") }}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="rounded-2xl bg-card border border-border/60 p-5">
-          <h2 className="font-display font-bold text-lg">Top selling products</h2>
-          <ul className="mt-3 space-y-3">
-            {stats?.topProducts?.map((p: any, i: number) => (
-              <li key={p.name + i} className="flex items-center gap-3">
-                <div className="size-9 grid place-items-center rounded-xl gradient-brand text-brand-foreground text-xs font-bold">{i + 1}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{p.name}</div>
-                  <div className="text-[11px] text-muted-foreground">{p.qty.toFixed(2)} units</div>
-                </div>
-                <div className="font-semibold tabular-nums">{formatINR(p.amount)}</div>
-              </li>
-            ))}
-            {(!stats?.topProducts || stats?.topProducts.length === 0) && <li className="text-sm text-muted-foreground">No data yet</li>}
-          </ul>
-        </div>
+        <Card className="card-hover">
+          <CardHeader className="pb-2">
+            <CardTitle>Top products</CardTitle>
+            <CardDescription>Best sellers by revenue</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {stats?.topProducts?.map((p: any, i: number) => (
+                <li key={p.name + i} className="flex items-center gap-3 group">
+                  <div className="size-9 grid place-items-center rounded-xl gradient-primary text-white text-xs font-bold shrink-0">
+                    {i + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-sm">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">{p.qty.toFixed(2)} units</div>
+                  </div>
+                  <div className="font-semibold tabular-nums text-sm">{formatINR(p.amount)}</div>
+                </li>
+              ))}
+              {(!stats?.topProducts || stats.topProducts.length === 0) && (
+                <li className="text-sm text-muted-foreground text-center py-6">No data yet</li>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
       </section>
     </>
   );
 }
 
-function QuickAction({ to, icon: Icon, label, tone }: { to: string; icon: typeof FilePlus2; label: string; tone: "primary" | "brand" }) {
-  const cls = tone === "primary" ? "gradient-primary text-primary-foreground" : "gradient-brand text-brand-foreground";
-  return (
-    <Link to={to} className={`group flex flex-col gap-2 rounded-xl ${cls} p-4 hover:translate-y-[-2px] transition-transform shadow-md`}>
-      <Icon className="size-5" />
-      <span className="text-sm font-semibold">{label}</span>
-    </Link>
-  );
-}
