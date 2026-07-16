@@ -26,7 +26,7 @@ export interface BillListItem {
   number: string;        // number
   date: string;          // date
   customerName: string;  // customer_name → customerName
-  type: "Cash" | "Credit"; // type
+  type: "Cash" | "Online"; // type
   itemCount: number;     // item_count → itemCount
   grandTotal: number;    // grand_total → grandTotal
 }
@@ -58,19 +58,25 @@ export interface BillDetail {
   number: string;
   date: string;
   time: string;
-  type: "Cash" | "Credit";
+  type: "Cash" | "Online";
   customerId: string;           // ← customer_id
   customerSnapshot: {           // ← customer_snapshot (nested, keys unchanged)
     name: string;
     address: string;
+    phone: string;
     tin: string;
+    gstin: string;
   };
   orderNumber: string;          // ← order_number
   partyTin: string;             // ← party_tin
   vehicleNumber: string;        // ← vehicle_number
+  transportDetails: string;     // ← transport_details
+  deliveryAddress: string;      // ← delivery_address
   lines: BillDetailLine[];
   discountTotal: number;        // ← discount_total
   gstTotal: number;             // ← gst_total
+  cgstTotal: number;            // ← cgst_total
+  sgstTotal: number;            // ← sgst_total
   subTotal: number;             // ← sub_total
   roundOff: number;             // ← round_off
   grandTotal: number;           // ← grand_total
@@ -120,6 +126,8 @@ function toDetail(b: Bill): BillDetail {
     orderNumber: b.orderNumber,
     partyTin: b.partyTin,
     vehicleNumber: b.vehicleNumber,
+    transportDetails: b.transportDetails,
+    deliveryAddress: b.deliveryAddress,
     lines: b.lines.map((l) => ({
       id: l.id,
       productId: l.productId,
@@ -132,6 +140,8 @@ function toDetail(b: Bill): BillDetail {
     })),
     discountTotal: b.discountTotal,
     gstTotal: b.gstTotal,
+    cgstTotal: b.cgstTotal,
+    sgstTotal: b.sgstTotal,
     subTotal: b.subTotal,
     roundOff: b.roundOff,
     grandTotal: b.grandTotal,

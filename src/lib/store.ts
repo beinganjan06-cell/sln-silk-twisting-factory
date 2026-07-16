@@ -46,15 +46,19 @@ export interface Bill {
   number: string;
   date: string; // ISO
   time: string;
-  type: "Cash" | "Credit";
+  type: "Cash" | "Online";
   customerId: string;
-  customerSnapshot: { name: string; address: string; tin: string };
+  customerSnapshot: { name: string; address: string; phone: string; tin: string; gstin: string };
   orderNumber: string;
   partyTin: string;
   vehicleNumber: string;
+  transportDetails: string;
+  deliveryAddress: string;
   lines: BillLine[];
   discountTotal: number;
   gstTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
   subTotal: number;
   roundOff: number;
   grandTotal: number;

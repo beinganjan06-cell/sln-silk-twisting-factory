@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/billing/create")({
   head: () => ({
     meta: [
       { title: "Create Bill — SLN Billing" },
-      { name: "description", content: "Create a new cash or credit bill with auto-calculated GST and grand total." },
+      { name: "description", content: "Create a new cash or Online bill with auto-calculated GST and grand total." },
     ],
   }),
   component: CreateBill,
@@ -45,12 +45,16 @@ function CreateBill() {
   const [billNumber, setBillNumber] = useState(() => `${settings.billPrefix}-${String(settings.nextBillNumber).padStart(4, "0")}`);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState(() => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-  const [type, setType] = useState<"Cash" | "Credit">("Cash");
+  const [type, setType] = useState<"Cash" | "Online">("Cash");
   const [customerId, setCustomerId] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
   const [orderNumberAuto, setOrderNumberAuto] = useState(true); // true = will auto-generate
   const [partyTin, setPartyTin] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerGstin, setCustomerGstin] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  const [transportDetails, setTransportDetails] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("Goods once sold will not be taken back.");
   const [lines, setLines] = useState<BillLine[]>([makeEmptyLine(settings.defaultGst)]);
@@ -86,6 +90,9 @@ function CreateBill() {
   useEffect(() => {
     if (customer) {
       setPartyTin(customer.tinNumber || "");
+      setCustomerPhone(customer.phone || "");
+      setCustomerGstin(customer.gstNumber || "");
+      setDeliveryAddress(customer.address || "");
       if (orderNumberAuto) setOrderNumber(""); // clear so backend auto-generates
     }
   }, [customer]);
@@ -99,9 +106,11 @@ function CreateBill() {
       const g = afterDisc * ((l.gstPct || 0) / 100);
       sub += base; disc += d; gst += g;
     }
+    const cgst = gst / 2;
+    const sgst = gst / 2;
     const beforeRound = sub - disc + gst;
     const grand = Math.round(beforeRound);
-    return { sub, disc, gst, roundOff: +(grand - beforeRound).toFixed(2), grand };
+    return { sub, disc, gst, cgst, sgst, roundOff: +(grand - beforeRound).toFixed(2), grand };
   }, [lines]);
 
   // Shortcuts
@@ -146,7 +155,11 @@ function CreateBill() {
     setOrderNumber("");
     setOrderNumberAuto(true);
     setPartyTin("");
+    setCustomerPhone("");
+    setCustomerGstin("");
     setVehicleNumber("");
+    setTransportDetails("");
+    setDeliveryAddress("");
     setNotes("");
     toast.info("Form cleared");
   }
@@ -161,14 +174,20 @@ function CreateBill() {
       customerSnapshot: {
         name: customer?.name ?? "",
         address: customer?.address ?? "",
+        phone: customer?.phone ?? customerPhone,
         tin: customer?.tinNumber ?? partyTin,
+        gstin: customer?.gstNumber ?? customerGstin,
       },
       orderNumber,
       partyTin,
       vehicleNumber,
+      transportDetails,
+      deliveryAddress,
       lines: lines.filter((l) => l.description.trim() && l.quantity > 0),
       discountTotal: +totals.disc.toFixed(2),
       gstTotal: +totals.gst.toFixed(2),
+      cgstTotal: +totals.cgst.toFixed(2),
+      sgstTotal: +totals.sgst.toFixed(2),
       subTotal: +totals.sub.toFixed(2),
       roundOff: totals.roundOff,
       grandTotal: totals.grand,
@@ -245,7 +264,7 @@ function CreateBill() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bill type">
               <div className="flex rounded-xl bg-muted p-1">
-                {(["Cash", "Credit"] as const).map((t) => (
+                {(["Cash", "Online"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setType(t)}
@@ -296,6 +315,12 @@ function CreateBill() {
           <Field label="Party TIN">
             <Input value={partyTin} onChange={(e) => setPartyTin(e.target.value)} />
           </Field>
+          <Field label="Customer Phone">
+            <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Customer phone number" />
+          </Field>
+          <Field label="Customer GSTIN">
+            <Input value={customerGstin} onChange={(e) => setCustomerGstin(e.target.value)} placeholder="Customer GSTIN" />
+          </Field>
           <Field label="Vehicle No.">
             <Input
               value={vehicleNumber}
@@ -307,6 +332,12 @@ function CreateBill() {
               placeholder="KA42AB1234"
               maxLength={13}
             />
+          </Field>
+          <Field label="Transport Details">
+            <Input value={transportDetails} onChange={(e) => setTransportDetails(e.target.value)} placeholder="e.g. Post Office - 560001" />
+          </Field>
+          <Field label="Delivery Address">
+            <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address" />
           </Field>
         </div>
 
@@ -361,7 +392,8 @@ function CreateBill() {
           <div className="mt-3 space-y-2 text-sm">
             <Row k="Sub total" v={formatINR(totals.sub)} />
             <Row k="Discount" v={"-" + formatINR(totals.disc)} />
-            <Row k="GST" v={"+" + formatINR(totals.gst)} />
+            <Row k="CGST" v={"+" + formatINR(totals.cgst)} />
+            <Row k="SGST" v={"+" + formatINR(totals.sgst)} />
             <Row k="Round off" v={formatINR(totals.roundOff)} />
             <div className="my-2 h-px bg-border" />
             <div className="flex items-center justify-between">
